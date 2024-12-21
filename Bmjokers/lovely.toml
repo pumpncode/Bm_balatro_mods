@@ -1,50 +1,7 @@
 [manifest]
-version = "1.0.4a"
+version = "1.0.4c"
 dump_lua = true
 priority = 0
-
-[[patches]]
-[patches.pattern]
-target = "card.lua"
-pattern = '''if self.ability.consumeable.hand_type then'''
-position = "after"
-payload = '''
-    if next(find_joker('Supermeteor')) then
-        update_hand_text({sound = 'button', volume = 0.7, pitch = 0.8, delay = 0.3}, {handname=localize(self.ability.consumeable.hand_type, 'poker_hands'),chips = G.GAME.hands[self.ability.consumeable.hand_type].chips, mult = G.GAME.hands[self.ability.consumeable.hand_type].mult, level=G.GAME.hands[self.ability.consumeable.hand_type].level})
-        level_up_hand(used_tarot, self.ability.consumeable.hand_type)
-        update_hand_text({sound = 'button', volume = 0.7, pitch = 1.1, delay = 0}, {mult = 0, chips = 0, handname = '', level = ''})
-    end
-'''
-match_indent = false
-overwrite = false
-
-[[patches]]
-[patches.pattern]
-target = "card.lua"
-pattern = '''update_hand_text({sound = 'button', volume = 0.7, pitch = 0.9, delay = 0}, {level='+1'})'''
-position = "at"
-payload = '''
-    if next(find_joker('Supermeteor')) then
-        update_hand_text({sound = 'button', volume = 0.7, pitch = 0.9, delay = 0}, {level='+2'})
-    else
-        update_hand_text({sound = 'button', volume = 0.7, pitch = 0.9, delay = 0}, {level='+1'})
-    end
-'''
-match_indent = false
-overwrite = false
-
-[[patches]]
-[patches.pattern]
-target = "card.lua"
-pattern = '''level_up_hand(self, k, true)'''
-position = "after"
-payload = '''
-    if next(find_joker('Supermeteor')) then
-        level_up_hand(self, k, true)
-    end
-'''
-match_indent = false
-overwrite = false
 
 [[patches]]
 [patches.pattern]
@@ -1544,16 +1501,8 @@ position = "before"
 payload = '''
 ]]
     end
-    
-    for k, v in pairs(SMODS.DollarRows) do
-        if v and v.payout and type(v.payout) == 'function' and not v.above_dot_bar then
-            money_gained = v:payout()
-            add_round_eval_row({dollars = money_gained, bonus = true, name='payout_arg_'..v.key,pitch = pitch, payout_arg = v})
-            pitch = pitch + 0.06
-            dollars = dollars + money_gained
-        end
-    end    for i = 1, #G.jokers.cards do
-        local total_ret = nil
+    for i = 1, #G.jokers.cards do
+        local total_ret = 0
         local retri = 1
         local m = 1
         while m <= retri do
@@ -1567,15 +1516,11 @@ payload = '''
                 if m ~= 1 then
                     card_eval_status_text(G.jokers.cards[i], 'jokers', nil, nil, nil, {message = localize('s_energy'), colour = G.C.BLACK})
                 end
-                if total_ret then
-                    total_ret = total_ret + ret
-                else
-                    total_ret = ret
-                end
+                total_ret = total_ret + ret
             end
-        m = m + 1
+            m = m + 1
         end
-        if total_ret then
+        if total_ret and total_ret ~= 0 then
             add_round_eval_row({dollars = total_ret, bonus = true, name='joker'..i, pitch = pitch, card = G.jokers.cards[i]})
             pitch = pitch + 0.06
             dollars = dollars + total_ret
