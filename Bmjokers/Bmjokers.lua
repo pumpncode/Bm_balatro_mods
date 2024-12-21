@@ -4,7 +4,7 @@
 --- MOD_AUTHOR: [BaiMao]
 --- MOD_DESCRIPTION: Create more powerful jokers
 --- BADGE_COLOUR: D9D919
---- VERSION: 1.0.4a
+--- VERSION: 1.0.4c
 ----------------------------------------------
 ------------MOD CODE -------------------------
 
@@ -196,7 +196,7 @@ SMODS.Joker{
     cost = 8,
     unlocked = true,
     discovered = true,
-    blueprint_compat = false,
+    blueprint_compat = true,
     eternal_compat = true,
     perishable_compat = true,
     pos = { x = 0, y = 0 },
@@ -207,6 +207,13 @@ SMODS.Joker{
         return { vars = {} }
     end,
     calculate = function(self, card, context)
+        if context.using_consumeable and context.consumeable.ability.set == 'Planet' then
+            G.E_MANAGER:add_event(Event({func = function()
+                card_eval_status_text(context.blueprint_card or card, 'extra', nil, nil, nil, {message = localize('k_again_ex')})
+                context.consumeable:use_consumeable(context.consumeable.area)
+            return true end}))
+            return nil, true
+        end
     end
 }
 
