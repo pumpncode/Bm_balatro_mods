@@ -609,7 +609,9 @@ SMODS.Joker{
                 for i = 1, #green_list do
                     if context.other_card == green_list[i] then
                         return {
+                            message = localize("k_again_ex"),
                             repetitions = 1,
+                            message_card = card,
                         }
                     end
                 end
