@@ -81,6 +81,14 @@ return {
                     '修为{C:attention}#2#{}重境界',
                 },
             },
+            j_bmjo_rna={
+                name = 'RNA',
+                text = {
+                    "如果回合的{C:attention}前两次弃牌",
+                    "都只有{C:attention}1{}张牌",
+                    "则获得一张{C:tarot}死神",
+                },
+            },
         },
         Other={
             Cultivation={
