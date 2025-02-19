@@ -76,6 +76,9 @@ function Card:generate_UIBox_ability_table()
     if self.ability and self.ability.name == 'Duke' and not self.debuff then
         generate_card_ui(G.P_CENTERS.m_steel, generate_UIBox_ability_table_val)
     end
+    if self.ability and self.ability.name == 'RNA' and not self.debuff then
+        generate_card_ui(G.P_CENTERS.c_death, generate_UIBox_ability_table_val)
+    end
     return generate_UIBox_ability_table_val
 end
 
@@ -215,6 +218,13 @@ SMODS.Atlas{
     px = 71,
     py = 95,
     path = 'shifu.png'
+}
+
+SMODS.Atlas{
+    key = 'rna',
+    px = 71,
+    py = 95,
+    path = 'rna.png'
 }
 
 SMODS.Joker{
@@ -670,6 +680,46 @@ SMODS.Joker{
                     card_eval_status_text((context.blueprint_card or card), 'jokers', nil, nil, nil, {message = localize('s_sifu'), colour = G.C.BLACK})
                 end
             end
+        end
+    end
+}
+
+SMODS.Joker{
+    key = 'rna',
+    name = 'RNA',
+    rarity = 1,
+    cost = 4,
+    unlocked = true,
+    discovered = true,
+    blueprint_compat = true,
+    eternal_compat = true,
+    perishable_compat = true,
+    pos = { x = 0, y = 0 },
+    loc_txt ={},
+    atlas = 'rna',
+    config = { extra = {discard_check = false} },
+    loc_vars = function(self, info_queue, card)
+        return { vars = {} }
+    end,
+    calculate = function(self, card, context)
+        if context.pre_discard and G.GAME.current_round.discards_used == 0 and #context.full_hand == 1 and not context.blueprint then
+            card.ability.extra.discard_check = true
+            card_eval_status_text(card, 'extra', nil, nil, nil, {message = localize('k_active_ex'), colour = G.C.RED})
+            local eval = function() return G.GAME.current_round.discards_used == 1 and not G.RESET_JIGGLES end
+            juice_card_until(card, eval, true)
+        end
+        if context.pre_discard and G.GAME.current_round.discards_used == 1 and #context.full_hand == 1 and card.ability.extra.discard_check and #G.consumeables.cards + G.GAME.consumeable_buffer < G.consumeables.config.card_limit then
+            G.GAME.consumeable_buffer = G.GAME.consumeable_buffer + 1
+            G.E_MANAGER:add_event(Event({func = function()
+                local _card = create_card('Tarot', G.consumeables, nil, nil, nil, nil, 'c_death', 'rna')
+                _card:add_to_deck()
+                G.consumeables:emplace(_card)
+                G.GAME.consumeable_buffer = 0
+            return true end}))
+            card_eval_status_text(context.blueprint_card or card, 'extra', nil, nil, nil, {message = localize('k_plus_tarot'), colour = G.C.SECONDARY_SET.Tarot})
+        end
+        if context.end_of_round and not context.blueprint then
+            card.ability.extra.discard_check = false
         end
     end
 }
