@@ -84,6 +84,14 @@ return {
                     'cultivation {C:attention}#2#{} level',
                 },
             },
+            j_bmjo_rna={
+                name = 'RNA',
+                text = {
+                    "If {C:attention}first two discard{} of round",
+                    "has only {C:attention}1{} card",
+                    "then create a {C:purple}Death{}",
+                },
+            },
         },
         Other={
             Cultivation={
