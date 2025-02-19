@@ -4,7 +4,7 @@
 --- MOD_AUTHOR: [BaiMao]
 --- MOD_DESCRIPTION: Create more powerful jokers
 --- BADGE_COLOUR: D9D919
---- VERSION: 1.0.4e
+--- VERSION: 1.0.4f
 ----------------------------------------------
 ------------MOD CODE -------------------------
 
