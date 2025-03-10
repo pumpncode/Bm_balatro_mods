@@ -3,7 +3,7 @@
 --- MOD_ID: Bmjokers
 --- MOD_AUTHOR: [BaiMao]
 --- MOD_DESCRIPTION: Create more powerful jokers
---- BADGE_COLOUR: D9D919
+--- BADGE_COLOUR: A64E91
 --- VERSION: 1.0.4g
 ----------------------------------------------
 ------------MOD CODE -------------------------
