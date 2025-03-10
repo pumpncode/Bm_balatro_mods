@@ -158,73 +158,10 @@ end
 SMODS.optional_features.retrigger_joker = true
 
 SMODS.Atlas{
-    key = 'heart',
+    key = 'bmjokers',
     px = 71,
     py = 95,
-    path = 'heart.png'
-}
-
-SMODS.Atlas{
-    key = 'supermeteor',
-    px = 71,
-    py = 95,
-    path = 'supermeteor.png'
-}
-
-SMODS.Atlas{
-    key = 'smartcowboy',
-    px = 71,
-    py = 95,
-    path = 'smartcowboy.png'
-}
-
-SMODS.Atlas{
-    key = 'clover',
-    px = 71,
-    py = 95,
-    path = 'clover.png'
-}
-
-SMODS.Atlas{
-    key = 'duke',
-    px = 71,
-    py = 95,
-    path = 'duke.png'
-}
-
-SMODS.Atlas{
-    key = 'supergodcard',
-    px = 71,
-    py = 95,
-    path = 'supergodcard.png'
-}
-
-SMODS.Atlas{
-    key = 'chef',
-    px = 71,
-    py = 95,
-    path = 'chef.png'
-}
-
-SMODS.Atlas{
-    key = 'microchip',
-    px = 71,
-    py = 95,
-    path = 'microchip.png'
-}
-
-SMODS.Atlas{
-    key = 'shifu',
-    px = 71,
-    py = 95,
-    path = 'shifu.png'
-}
-
-SMODS.Atlas{
-    key = 'rna',
-    px = 71,
-    py = 95,
-    path = 'rna.png'
+    path = 'BmJokers.png'
 }
 
 SMODS.Joker{
@@ -239,7 +176,7 @@ SMODS.Joker{
     pos = { x = 0, y = 0 },
     soul_pos = { x = 1, y = 0 },
     loc_txt ={},
-    atlas = 'heart',
+    atlas = 'bmjokers',
     config = { extra = {price = 100, cost_lost = 100} },
     loc_vars = function(self, info_queue, card)
         local state
@@ -279,9 +216,9 @@ SMODS.Joker{
     blueprint_compat = true,
     eternal_compat = true,
     perishable_compat = true,
-    pos = { x = 0, y = 0 },
+    pos = { x = 2, y = 0 },
     loc_txt ={},
-    atlas = 'supermeteor',
+    atlas = 'bmjokers',
     config = { extra = {} },
     loc_vars = function(self, info_queue, card)
         return { vars = {} }
@@ -297,31 +234,45 @@ SMODS.Joker{
 }
 
 SMODS.Joker{
-    key = 'smartcowboy',
-    name = 'Smartcowboy',
+    key = 'duke',
+    name = 'Duke',
     rarity = 3,
-    cost = 8,
+    cost = 9,
     unlocked = true,
     discovered = true,
     blueprint_compat = true,
     eternal_compat = true,
     perishable_compat = true,
-    pos = { x = 0, y = 0 },
+    pos = { x = 3, y = 0 },
     loc_txt ={},
-    atlas = 'smartcowboy',
-    config = { extra = {perxmult = 0.3, perdollar = 30, x_mult = 1} },
+    atlas = 'bmjokers',
+    config = { extra = {x_mult = 1.2, repetitions = 2} },
     loc_vars = function(self, info_queue, card)
-        return { vars = {card.ability.extra.perxmult, card.ability.extra.perdollar, card.ability.extra.x_mult} }
+        return { vars = {card.ability.extra.x_mult, card.ability.extra.repetitions} }
     end,
     calculate = function(self, card, context)
-        local smartcowboy_mult = math.floor((G.GAME.dollars + (G.GAME.dollar_buffer or 0))/card.ability.extra.perdollar)
-        card.ability.extra.x_mult = 1 + card.ability.extra.perxmult * math.abs(smartcowboy_mult)
-        if context.joker_main then
-            if card.ability.extra.x_mult > 1 then
-                return {
-                    message = localize { type = 'variable', key = 'a_xmult', vars = {card.ability.extra.x_mult}},
-                    Xmult_mod = card.ability.extra.x_mult
-                }
+        if context.cardarea == G.hand then
+            if not context.end_of_round then
+                if context.individual and context.other_card:is_face() then
+                    return{
+                        x_mult = card.ability.extra.x_mult,
+                        card = card
+                    }
+                elseif context.repetition and context.other_card:is_face() and context.other_card.ability.effect == 'Steel Card' then
+                    return{
+                        message = localize('k_again_ex'),
+                        repetitions = card.ability.extra.repetitions,
+                        card = card
+                    }
+                end
+            else
+                if context.repetition and context.other_card:is_face() and context.other_card.ability.effect == 'Steel Card' then
+                    return{
+                        message = localize('k_again_ex'),
+                        repetitions = card.ability.extra.repetitions,
+                        card = card
+                    }
+                end
             end
         end
     end
@@ -337,9 +288,9 @@ SMODS.Joker{
     blueprint_compat = true,
     eternal_compat = true,
     perishable_compat = true,
-    pos = { x = 0, y = 0 },
+    pos = { x = 4, y = 0 },
     loc_txt ={},
-    atlas = 'clover',
+    atlas = 'bmjokers',
     config = { extra = {odd = 2, amount = 1, amounts = 1, joker_to_destroy = nil} },
     loc_vars = function(self, info_queue, card)
         return { vars = {''..(G.GAME and G.GAME.probabilities.normal or 1), card.ability.extra.odd, card.ability.extra.amount, card.ability.extra.amounts} }
@@ -420,45 +371,31 @@ SMODS.Joker{
 }
 
 SMODS.Joker{
-    key = 'duke',
-    name = 'Duke',
+    key = 'smartcowboy',
+    name = 'Smartcowboy',
     rarity = 3,
-    cost = 9,
+    cost = 8,
     unlocked = true,
     discovered = true,
     blueprint_compat = true,
     eternal_compat = true,
     perishable_compat = true,
-    pos = { x = 0, y = 0 },
+    pos = { x = 5, y = 0 },
     loc_txt ={},
-    atlas = 'duke',
-    config = { extra = {x_mult = 1.2, repetitions = 2} },
+    atlas = 'bmjokers',
+    config = { extra = {perxmult = 0.3, perdollar = 30, x_mult = 1} },
     loc_vars = function(self, info_queue, card)
-        return { vars = {card.ability.extra.x_mult, card.ability.extra.repetitions} }
+        return { vars = {card.ability.extra.perxmult, card.ability.extra.perdollar, card.ability.extra.x_mult} }
     end,
     calculate = function(self, card, context)
-        if context.cardarea == G.hand then
-            if not context.end_of_round then
-                if context.individual and context.other_card:is_face() then
-                    return{
-                        x_mult = card.ability.extra.x_mult,
-                        card = card
-                    }
-                elseif context.repetition and context.other_card:is_face() and context.other_card.ability.effect == 'Steel Card' then
-                    return{
-                        message = localize('k_again_ex'),
-                        repetitions = card.ability.extra.repetitions,
-                        card = card
-                    }
-                end
-            else
-                if context.repetition and context.other_card:is_face() and context.other_card.ability.effect == 'Steel Card' then
-                    return{
-                        message = localize('k_again_ex'),
-                        repetitions = card.ability.extra.repetitions,
-                        card = card
-                    }
-                end
+        local smartcowboy_mult = math.floor((G.GAME.dollars + (G.GAME.dollar_buffer or 0))/card.ability.extra.perdollar)
+        card.ability.extra.x_mult = 1 + card.ability.extra.perxmult * math.abs(smartcowboy_mult)
+        if context.joker_main then
+            if card.ability.extra.x_mult > 1 then
+                return {
+                    message = localize { type = 'variable', key = 'a_xmult', vars = {card.ability.extra.x_mult}},
+                    Xmult_mod = card.ability.extra.x_mult
+                }
             end
         end
     end
@@ -474,9 +411,9 @@ SMODS.Joker{
     blueprint_compat = true,
     eternal_compat = true,
     perishable_compat = true,
-    pos = { x = 0, y = 0 },
+    pos = { x = 0, y = 1 },
     loc_txt ={},
-    atlas = 'supergodcard',
+    atlas = 'bmjokers',
     config = { extra = {times = 1, suml = 0} },
     loc_vars = function(self, info_queue, card)
         return { vars = {card.ability.extra.times, card.ability.extra.suml, card.ability.extra.suml*card.ability.extra.times} }
@@ -513,9 +450,9 @@ SMODS.Joker{
     blueprint_compat = true,
     eternal_compat = true,
     perishable_compat = true,
-    pos = { x = 0, y = 0 },
+    pos = { x = 1, y = 1 },
     loc_txt ={},
-    atlas = 'chef',
+    atlas = 'bmjokers',
     config = { extra = {} },
     loc_vars = function(self, info_queue, card)
         return { vars = {} }
@@ -581,56 +518,6 @@ SMODS.Joker{
 }
 
 SMODS.Joker{
-    key = 'microchip',
-    name = 'Microchip',
-    rarity = 3,
-    cost = 15,
-    unlocked = true,
-    discovered = true,
-    blueprint_compat = true,
-    eternal_compat = true,
-    perishable_compat = true,
-    pos = { x = 0, y = 0 },
-    loc_txt ={},
-    atlas = 'microchip',
-    config = { extra = {} },
-    loc_vars = function(self, info_queue, card)
-        return { vars = {} }
-    end,
-    calculate = function(self, card, context)
-        local left_joker = nil
-        local right_joker = nil
-        local transfer_ret = nil
-        local green_list = {}
-        if context.retrigger_joker_check then
-            for i = 1, #G.jokers.cards do
-                if G.jokers.cards[i] == (context.blueprint_card or card) then
-                    if G.jokers.cards[i-1] then
-                        left_joker = G.jokers.cards[i-1]
-                        green_list[#green_list+1] = left_joker
-                    end
-                    if G.jokers.cards[i+1] then
-                        right_joker = G.jokers.cards[i+1]
-                        green_list[#green_list+1] = right_joker
-                    end
-                end
-            end
-            if #green_list >= 1 then
-                for i = 1, #green_list do
-                    if context.other_card == green_list[i] then
-                        return {
-                            message = localize("k_again_ex"),
-                            repetitions = 1,
-                            message_card = card,
-                        }
-                    end
-                end
-            end
-        end
-    end
-}
-
-SMODS.Joker{
     key = 'shifu',
     rarity = 3,
     cost = 15,
@@ -639,9 +526,9 @@ SMODS.Joker{
     blueprint_compat = true,
     eternal_compat = true,
     perishable_compat = true,
-    pos = { x = 0, y = 0 },
+    pos = { x = 2, y = 1 },
     loc_txt ={},
-    atlas = 'shifu',
+    atlas = 'bmjokers',
     config = { extra = {amount = 1, magnitude = 1} },
     loc_vars = function(self, info_queue, card)
         return { vars = {card.ability.extra.amount, card.ability.extra.magnitude} }
@@ -685,6 +572,56 @@ SMODS.Joker{
 }
 
 SMODS.Joker{
+    key = 'microchip',
+    name = 'Microchip',
+    rarity = 3,
+    cost = 15,
+    unlocked = true,
+    discovered = true,
+    blueprint_compat = true,
+    eternal_compat = true,
+    perishable_compat = true,
+    pos = { x = 3, y = 1 },
+    loc_txt ={},
+    atlas = 'bmjokers',
+    config = { extra = {} },
+    loc_vars = function(self, info_queue, card)
+        return { vars = {} }
+    end,
+    calculate = function(self, card, context)
+        local left_joker = nil
+        local right_joker = nil
+        local transfer_ret = nil
+        local green_list = {}
+        if context.retrigger_joker_check then
+            for i = 1, #G.jokers.cards do
+                if G.jokers.cards[i] == (context.blueprint_card or card) then
+                    if G.jokers.cards[i-1] then
+                        left_joker = G.jokers.cards[i-1]
+                        green_list[#green_list+1] = left_joker
+                    end
+                    if G.jokers.cards[i+1] then
+                        right_joker = G.jokers.cards[i+1]
+                        green_list[#green_list+1] = right_joker
+                    end
+                end
+            end
+            if #green_list >= 1 then
+                for i = 1, #green_list do
+                    if context.other_card == green_list[i] then
+                        return {
+                            message = localize("k_again_ex"),
+                            repetitions = 1,
+                            message_card = card,
+                        }
+                    end
+                end
+            end
+        end
+    end
+}
+
+SMODS.Joker{
     key = 'rna',
     name = 'RNA',
     rarity = 1,
@@ -694,9 +631,9 @@ SMODS.Joker{
     blueprint_compat = true,
     eternal_compat = true,
     perishable_compat = true,
-    pos = { x = 0, y = 0 },
+    pos = { x = 4, y = 1 },
     loc_txt ={},
-    atlas = 'rna',
+    atlas = 'bmjokers',
     config = { extra = {discard_check = false} },
     loc_vars = function(self, info_queue, card)
         return { vars = {} }
