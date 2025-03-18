@@ -14,19 +14,6 @@ function Game:start_run(args)
     G.GAME.bmjokers = true
 end
 
-G.FUNCS.microchip_leftcompat = function(e)
-    if e.config.ref_table.ability.leftblueprint_compat ~= e.config.ref_table.ability.leftblueprint_compat_check then
-        if e.config.ref_table.ability.leftblueprint_compat == 'compatible' then 
-            e.config.colour = mix_colours(G.C.GREEN, G.C.JOKER_GREY, 0.8)
-            e.config.ref_table.ability.leftblueprint_compat_ui = localize('l_compatible')
-        elseif e.config.ref_table.ability.leftblueprint_compat == 'incompatible' then
-            e.config.colour = mix_colours(G.C.RED, G.C.JOKER_GREY, 0.8)
-            e.config.ref_table.ability.leftblueprint_compat_ui = localize('l_incompatible')
-        end
-        e.config.ref_table.ability.leftblueprint_compat_check = e.config.ref_table.ability.leftblueprint_compat
-    end
-end
-
 SMODS.Joker:take_ownership('blueprint', {
     calculate = function(self, card, context)
         local other_joker = nil
@@ -80,6 +67,19 @@ SMODS.Joker:take_ownership('brainstorm', {
         end
     end
 })
+
+G.FUNCS.microchip_leftcompat = function(e)
+    if e.config.ref_table.ability.leftblueprint_compat ~= e.config.ref_table.ability.leftblueprint_compat_check then
+        if e.config.ref_table.ability.leftblueprint_compat == 'compatible' then 
+            e.config.colour = mix_colours(G.C.GREEN, G.C.JOKER_GREY, 0.8)
+            e.config.ref_table.ability.leftblueprint_compat_ui = localize('l_compatible')
+        elseif e.config.ref_table.ability.leftblueprint_compat == 'incompatible' then
+            e.config.colour = mix_colours(G.C.RED, G.C.JOKER_GREY, 0.8)
+            e.config.ref_table.ability.leftblueprint_compat_ui = localize('l_incompatible')
+        end
+        e.config.ref_table.ability.leftblueprint_compat_check = e.config.ref_table.ability.leftblueprint_compat
+    end
+end
 
 G.FUNCS.microchip_rightcompat = function(e)
     if e.config.ref_table.ability.rightblueprint_compat ~= e.config.ref_table.ability.rightblueprint_compat_check then
