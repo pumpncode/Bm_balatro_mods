@@ -27,6 +27,60 @@ G.FUNCS.microchip_leftcompat = function(e)
     end
 end
 
+SMODS.Joker:take_ownership('blueprint', {
+    calculate = function(self, card, context)
+        local other_joker = nil
+        for i = 1, #G.jokers.cards do
+            if G.jokers.cards[i] == card then
+                local check_pos = i + 1
+                while check_pos <= #G.jokers.cards and G.jokers.cards[check_pos] and G.jokers.cards[check_pos].ability and G.jokers.cards[check_pos].ability.name == 'Microchip' and not G.jokers.cards[check_pos].debuff do
+                    check_pos = check_pos + 1
+                end
+                other_joker = G.jokers.cards[check_pos]
+            end
+        end
+        if other_joker and other_joker ~= card and not context.no_blueprint then
+            context.blueprint = (context.blueprint and (context.blueprint + 1)) or 1
+            context.blueprint_card = context.blueprint_card or card
+            if context.blueprint > #G.jokers.cards + 1 then return end
+            local other_joker_ret = other_joker:calculate_joker(context)
+            context.blueprint = nil
+            local eff_card = context.blueprint_card or card
+            context.blueprint_card = nil
+            if other_joker_ret then 
+                other_joker_ret.card = eff_card
+                other_joker_ret.colour = G.C.BLUE
+                return other_joker_ret
+            end
+        end
+    end
+})
+
+SMODS.Joker:take_ownership('brainstorm', {
+    calculate = function(self, card, context)
+        local check_pos = 1
+        local other_joker = nil
+        while check_pos <= #G.jokers.cards and G.jokers.cards[check_pos] and G.jokers.cards[check_pos].ability and G.jokers.cards[check_pos].ability.name == 'Microchip' and not G.jokers.cards[check_pos].debuff do
+            check_pos = check_pos + 1
+        end
+        other_joker = G.jokers.cards[check_pos]
+        if other_joker and other_joker ~= card and not context.no_blueprint then
+            context.blueprint = (context.blueprint and (context.blueprint + 1)) or 1
+            context.blueprint_card = context.blueprint_card or card
+            if context.blueprint > #G.jokers.cards + 1 then return end
+            local other_joker_ret = other_joker:calculate_joker(context)
+            context.blueprint = nil
+            local eff_card = context.blueprint_card or card
+            context.blueprint_card = nil
+            if other_joker_ret then 
+                other_joker_ret.card = eff_card
+                other_joker_ret.colour = G.C.RED
+                return other_joker_ret
+            end
+        end
+    end
+})
+
 G.FUNCS.microchip_rightcompat = function(e)
     if e.config.ref_table.ability.rightblueprint_compat ~= e.config.ref_table.ability.rightblueprint_compat_check then
         if e.config.ref_table.ability.rightblueprint_compat == 'compatible' then 
