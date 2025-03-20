@@ -120,7 +120,7 @@ end
 local G_UIDEF_card_h_popup_ref = G.UIDEF.card_h_popup
 function G.UIDEF.card_h_popup(card)
     local G_UIDEF_card_h_popup_val = G_UIDEF_card_h_popup_ref(card)
-    if card.ability and card.ability.set == 'Joker' and card.ability.retriggers >= 1 then
+    if card.ability and card.ability.set == 'Joker' and card.ability.retriggers and card.ability.retriggers >= 1 then
         local badges = G_UIDEF_card_h_popup_val.nodes[1].nodes[1].nodes[1].nodes[3].nodes
         badges[#badges + 1] = create_badge(localize('cultivation', "labels"), HEX("6495ed"))
     end
@@ -584,19 +584,7 @@ SMODS.Joker{
             if preach_jokers[1] and not (context.blueprint_card or card).getting_sliced then
                 for i = 1, #preach_jokers do
                     local mai = shallow_copy(preach_jokers[i].ability)
-                    for k, v in pairs(mai) do
-                        if (type(mai[k]) ~= "table") or type(mai[k]) == "number" then
-                            if type(mai[k]) == "number" and k == "retriggers" then
-                                mai[k] = mai[k] + card.ability.extra.magnitude
-                            end
-                        else
-                            for _k, _v in pairs(mai[k]) do
-                                if type(mai[k][_k]) == "number" and _k == "retriggers" then
-                                    mai[k][_k] = mai[k][_k] + card.ability.extra.magnitude
-                                end
-                            end
-                        end
-                    end
+                    mai["retriggers"] = mai["retriggers"] + card.ability.extra.magnitude
                     preach_jokers[i].ability = mai
                     card_eval_status_text(preach_jokers[i], 'jokers', nil, nil, nil, {message = localize('s_preach'), colour = G.C.BLACK})
                     card_eval_status_text((context.blueprint_card or card), 'jokers', nil, nil, nil, {message = localize('s_sifu'), colour = G.C.BLACK})
