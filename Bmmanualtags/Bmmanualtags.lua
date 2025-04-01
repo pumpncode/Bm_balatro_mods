@@ -4,7 +4,7 @@
 --- MOD_AUTHOR: [BaiMao]
 --- MOD_DESCRIPTION: Make tags as manually triggered as possible
 --- BADGE_COLOUR: A64E91
---- VERSION: 1.0.1
+--- VERSION: 1.0.1a
 ----------------------------------------------
 ------------MOD CODE -------------------------
 
@@ -73,10 +73,15 @@ function Tag:click_to_run()
     elseif self.config.type == 'shop_final_pass' then
         self:apply_to_run({type = 'shop_final_pass'})
     elseif self.config.type == 'tag_add' then
-        local _tag = G.GAME.tags[1]
+        local _tag = self
         for i = 1, #G.GAME.tags do
-            if G.GAME.tags[i].key ~= self.key then
-                _tag = G.GAME.tags[i]
+            if G.GAME.tags[i] == self then
+                for j = i + 1, #G.GAME.tags do
+                    if G.GAME.tags[j].key ~= self.key then
+                        _tag = G.GAME.tags[j]
+                        break
+                    end
+                end
                 break
             end
         end
