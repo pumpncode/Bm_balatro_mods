@@ -4,7 +4,7 @@
 --- MOD_AUTHOR: [BaiMao]
 --- MOD_DESCRIPTION: Make tags as manually triggered as possible
 --- BADGE_COLOUR: A64E91
---- VERSION: 1.0.1a
+--- VERSION: 1.0.1b
 ----------------------------------------------
 ------------MOD CODE -------------------------
 
@@ -15,6 +15,7 @@ local Incompatible_Tags = {
 }
 
 function Tag:can_trigger()
+    if not self.HUD_tag then return false end
     local type = self.config.type
     if type == 'store_joker_create' then
         return false
