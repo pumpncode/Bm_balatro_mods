@@ -44,7 +44,7 @@ if self.states.drag.is and self:can_mobile_card() then
     local card_y = self.VT.y+self.VT.h/2
     for i, v in ipairs(possible_areas) do
         if v.T.x < card_x and card_x < v.T.x + v.T.w and v.T.y < card_y and card_y < v.T.y + v.T.h then
-            if (self.area == nil or self.area ~= v) and (v == G.hand or v.config.card_limit > #v.cards) and (self.area ~= G.shop_booster) then
+            if (self.area == nil or self.area ~= v) and (v == G.hand or v == G.shop_booster or v.config.card_limit > #v.cards) and (self.area ~= G.shop_booster) then
                 if (G.GAME.exchange == nil and v == G.bm_wallet) or (G.GAME.exchange == true and v == G.jokers) then
                     return
                 end
