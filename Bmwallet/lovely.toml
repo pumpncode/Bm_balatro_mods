@@ -362,6 +362,7 @@ function create_drag_target_from_card(_card)
                     release_func = (function(other)
                         if G.FUNCS.can_use_touch(other) then
                             G.FUNCS.use_card({config={ref_table = other}})
+                            return
                         end
                     end)
                 })
@@ -374,6 +375,7 @@ function create_drag_target_from_card(_card)
                     release_func = (function(other)
                         if G.FUNCS.can_select_card_touch(other) then 
                             G.FUNCS.use_card({config={ref_table = other}})
+                            return
                         end
                     end)
                 })
