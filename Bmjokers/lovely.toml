@@ -80,7 +80,7 @@ overwrite = false
 [[patches]]
 [patches.pattern]
 target = "card.lua"
-pattern = "context.blueprint_card = nil"
+pattern = "local other_joker_ret = other_joker:calculate_joker(context)"
 position = "after"
 payload = '''
 --[[
