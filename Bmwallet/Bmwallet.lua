@@ -312,13 +312,30 @@ function Blind:defeat(silent)
                 break
             elseif G.GAME.ASB[i].defeated and G.GAME.ASB[i].edition then
                 if G.GAME.ASB[i].edition == 'foil' then
-                    ASB_defeat_rewards('foil')
+                    if G.P_BLINDS[G.GAME.ASB[i].key].boss.showdown then
+                        ASB_defeat_rewards('foil', true)
+                    else
+                        ASB_defeat_rewards('foil')
+                    end
                 elseif G.GAME.ASB[i].edition == 'holo' then
-                    ASB_defeat_rewards('holo')
+                    if G.P_BLINDS[G.GAME.ASB[i].key].boss.showdown then
+                        ASB_defeat_rewards('holo', true)
+                    else
+                        ASB_defeat_rewards('holo')
+                    end
+                    
                 elseif G.GAME.ASB[i].edition == 'polychrome' then
-                    ASB_defeat_rewards('polychrome')
+                    if G.P_BLINDS[G.GAME.ASB[i].key].boss.showdown then
+                        ASB_defeat_rewards('polychrome', true)
+                    else
+                        ASB_defeat_rewards('polychrome')
+                    end
                 elseif G.GAME.ASB[i].edition == 'negative' then
-                    ASB_defeat_rewards('negative')
+                    if G.P_BLINDS[G.GAME.ASB[i].key].boss.showdown then
+                        ASB_defeat_rewards('negative', true)
+                    else
+                        ASB_defeat_rewards('negative')
+                    end
                 end
                 break
             end
@@ -335,26 +352,38 @@ function Blind:defeat(silent)
     Blind_defeat_ref(self, silent)
 end
 
-function ASB_defeat_rewards(type)
+function ASB_defeat_rewards(type, showdown)
     if G.jokers.highlighted and G.jokers.highlighted[1] then
         local _card = G.jokers.highlighted[1]
         if type == 'foil' then
-            _card.ability.f_chips = _card.ability.f_chips + 50
+            if showdown then
+                _card.ability.f_chips = _card.ability.f_chips + 75
+            else
+                _card.ability.f_chips = _card.ability.f_chips + 50
+            end
             card_eval_status_text(_card, 'extra', nil, nil, nil, {message = localize('b_forge_blue'), colour = G.C.BLUE})
         elseif type == 'holo' then
-            _card.ability.f_mult = _card.ability.f_mult + 10
+            if showdown then
+                _card.ability.f_mult = _card.ability.f_mult + 15
+            else
+                _card.ability.f_mult = _card.ability.f_mult + 10
+            end
             card_eval_status_text(_card, 'extra', nil, nil, nil, {message = localize('b_forge_red'), colour = G.C.RED})
         elseif type == 'polychrome' then
-            _card.ability.f_x_mult = _card.ability.f_x_mult + (_card.ability.f_x_mult > 1 and 1 or 2)
+            if showdown then
+                _card.ability.f_x_mult = _card.ability.f_x_mult + (_card.ability.f_x_mult > 1 and 1.5 or 2.5)
+            else
+                _card.ability.f_x_mult = _card.ability.f_x_mult + (_card.ability.f_x_mult > 1 and 1 or 2)
+            end
             card_eval_status_text(_card, 'extra', nil, nil, nil, {message = localize('b_forge_gold'), colour = G.C.GOLD})
         elseif type == 'negative' then
             local chance = pseudorandom('defeat_rewards')
             if chance > 5/6 then
-                ASB_defeat_rewards('polychrome')
+                ASB_defeat_rewards('polychrome', showdown)
             elseif chance > 1/2 then
-                ASB_defeat_rewards('holo')
+                ASB_defeat_rewards('holo', showdown)
             else
-                ASB_defeat_rewards('foil')
+                ASB_defeat_rewards('foil', showdown)
             end
         end
     else
