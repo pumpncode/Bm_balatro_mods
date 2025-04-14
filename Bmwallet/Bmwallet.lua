@@ -4,7 +4,7 @@
 --- MOD_AUTHOR: [BaiMao]
 --- MOD_DESCRIPTION: Let you have one wallet and play games more freely
 --- BADGE_COLOUR: A64E91
---- VERSION: 1.0.4f-Alpha
+--- VERSION: 1.0.4f-Beta
 ----------------------------------------------
 ------------MOD CODE -------------------------
 
@@ -886,6 +886,9 @@ function create_tag_replacement_card(area, forced_key)
             _pool[#_pool + 1] = v.key
         end
     end
+    if #_pool == 0 then
+        _pool[#_pool + 1] = "tag_handy"
+    end
     local _key = pseudorandom_element(_pool, pseudoseed('tag_rep'))
     if forced_key then _key = forced_key end
     G.GAME.used_jokers[_key] = true
@@ -936,14 +939,23 @@ function create_tag_replacement_card(area, forced_key)
     return card
 end
 
-function create_blind_replacement_card(area, forced_key)
+function create_blind_replacement_card(area, showdown, forced_key)
     local _initial_pool = G.P_BLINDS
     local _pool = {}
     for k, v in pairs(_initial_pool) do
         if (G.GAME.used_jokers[k] and not next(find_joker("Showman"))) or not v.boss or G.GAME.banned_keys[k] then
-        else
+        elseif (showdown and G.P_BLINDS[k].boss.showdown) then
+            _pool[#_pool + 1] = k
+        elseif not showdown then
             _pool[#_pool + 1] = k
         end
+    end
+    if #_pool == 0 then
+        if showdown then
+            _pool[#_pool + 1] = "bl_final_acorn"
+        else
+           _pool[#_pool + 1] = "bl_hook"
+        end 
     end
     local _key = pseudorandom_element(_pool, pseudoseed('blind_rep'))
     if forced_key then _key = forced_key end
@@ -1076,7 +1088,9 @@ function create_card_for_new_shop(area)
         card:start_materialize()
         return card
     elseif card_for_new > 0.9 then
-        local card = create_blind_replacement_card(area)
+        local showdown = nil
+        if ((G.GAME.round_resets.ante)%G.GAME.win_ante == 0 and G.GAME.round_resets.ante >= 2) then showdown = true end
+        local card = create_blind_replacement_card(area, showdown)
         create_new_shop_card_ui(card, 'Blind', area)
         return card
     else
