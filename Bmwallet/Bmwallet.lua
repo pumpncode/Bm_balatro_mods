@@ -1637,7 +1637,8 @@ SMODS.calculation_keys[#SMODS.calculation_keys + 1] = 'f_x_mult'
 local eval_card_ref = eval_card
 function eval_card(card, context)
     local ret, post_trig = eval_card_ref(card, context)
-    if next(ret) then
+    if not card:can_calculate(context.ignore_debuff) then
+    elseif (context.main_scoring and (card.ability.set == 'Default' or card.ability.set == 'Enhanced')) or (context.joker_main and card.ability.set == 'Joker') then
         local f_chips = card:get_f_chips()
         local f_mult = card:get_f_mult()
         local f_x_mult = card:get_f_x_mult()
