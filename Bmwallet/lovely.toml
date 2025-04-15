@@ -1,5 +1,5 @@
 [manifest]
-version = "1.0.4f-Beta"
+version = "1.0.4f-Gamma"
 dump_lua = true
 priority = 0
 
