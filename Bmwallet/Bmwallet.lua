@@ -4,7 +4,7 @@
 --- MOD_AUTHOR: [BaiMao]
 --- MOD_DESCRIPTION: Let you have one wallet and play games more freely
 --- BADGE_COLOUR: A64E91
---- VERSION: 1.0.4f-Beta
+--- VERSION: 1.0.4f-Gamma
 ----------------------------------------------
 ------------MOD CODE -------------------------
 
@@ -233,7 +233,7 @@ end
 local Blind_set_blind_ref = Blind.set_blind
 function Blind:set_blind(blind, reset, silent)
     Blind_set_blind_ref(self, blind, reset, silent)
-    if G.GAME.ASB and G.GAME.ASB[1] and G.GAME.ASB[1].edition and not G.GAME.ASB[1].done then
+    if G.GAME.blind.boss and G.GAME.ASB and G.GAME.ASB[1] and G.GAME.ASB[1].edition and not G.GAME.ASB[1].done then
         local mult_bonus = 1
         if G.GAME.ASB[1].edition == 'foil' then
             mult_bonus = mult_bonus*2
@@ -944,9 +944,7 @@ function create_blind_replacement_card(area, showdown, forced_key)
     local _pool = {}
     for k, v in pairs(_initial_pool) do
         if (G.GAME.used_jokers[k] and not next(find_joker("Showman"))) or not v.boss or G.GAME.banned_keys[k] then
-        elseif (showdown and G.P_BLINDS[k].boss.showdown) then
-            _pool[#_pool + 1] = k
-        elseif not showdown then
+        elseif (showdown and G.P_BLINDS[k].boss.showdown) or not showdown then
             _pool[#_pool + 1] = k
         end
     end
