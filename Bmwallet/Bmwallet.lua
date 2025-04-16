@@ -4,7 +4,7 @@
 --- MOD_AUTHOR: [BaiMao]
 --- MOD_DESCRIPTION: Let you have one wallet and play games more freely
 --- BADGE_COLOUR: A64E91
---- VERSION: 1.0.4f-Gamma
+--- VERSION: 1.0.4f-Delta
 ----------------------------------------------
 ------------MOD CODE -------------------------
 
@@ -484,8 +484,10 @@ local Card_remove_ref = Card.remove
 function Card:remove()
     Card_remove_ref(self)
     if not G.OVERLAY_MENU then
-        if not next(find_card_in_wallet(self.config.center.key, true)) and not next(find_card_in_new_shop(self.config.center.key, true)) then
+        if not next(SMODS.find_card(self.config.center.key, true)) and not next(find_card_in_wallet(self.config.center.key, true)) and not next(find_card_in_new_shop(self.config.center.key, true)) then
             G.GAME.used_jokers[self.config.center.key] = nil
+        else
+            G.GAME.used_jokers[self.config.center.key] = true
         end
         if self.ability.as_tag and not next(find_tag_in_new_shop(self.ability.as_tag)) then
             G.GAME.used_jokers[self.ability.as_tag] = nil
