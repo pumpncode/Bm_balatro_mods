@@ -616,7 +616,7 @@ function G.UIDEF.new_shop()
         }},
         config = {
             align="cm",
-            offset = {x=0.05,y=-15},
+            offset = {x=0.03,y=-15},
             major = G.HUD:get_UIE_by_ID('hand_chip_total'),
             bond = 'Weak'
         }
