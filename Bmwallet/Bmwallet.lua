@@ -709,6 +709,44 @@ function create_new_shop_card_ui(card, type, area)
     return true end)}))
 end
 
+local G_FUNCS_hand_text_UI_set_ref = G.FUNCS.hand_text_UI_set
+G.FUNCS.hand_text_UI_set = function(e)
+    if G.NEW_SHOP_ENTER and (G.GAME.current_round.current_hand.chip_total >= 1 or G.GAME.current_round.current_hand.handname ~= '') and G.NEW_SHOP_ENTER.alignment.offset.y > -15 then
+        G.NEW_SHOP_ENTER.alignment.offset.y = -15
+        G.GAME.NEW_SHOP_ENTER_replace = true
+    elseif G.NEW_SHOP_ENTER and (G.GAME.current_round.current_hand.chip_total < 1 and G.GAME.current_round.current_hand.handname == '') and G.NEW_SHOP_ENTER.alignment.offset.y < 0.03 and G.GAME.NEW_SHOP_ENTER_replace then
+        G.NEW_SHOP_ENTER.alignment.offset.y = 0.03
+        G.GAME.NEW_SHOP_ENTER_replace = nil
+    end
+    if G.OLD_SHOP_RETURN and (G.GAME.current_round.current_hand.chip_total >= 1 or G.GAME.current_round.current_hand.handname ~= '') and G.OLD_SHOP_RETURN.alignment.offset.y > -15 then
+        G.OLD_SHOP_RETURN.alignment.offset.y = -15
+        G.GAME.OLD_SHOP_RETURN_replace = true
+    elseif G.OLD_SHOP_RETURN and (G.GAME.current_round.current_hand.chip_total < 1 and G.GAME.current_round.current_hand.handname == '') and G.OLD_SHOP_RETURN.alignment.offset.y < 0.03 and G.GAME.OLD_SHOP_RETURN_replace then
+        G.OLD_SHOP_RETURN.alignment.offset.y = 0.03
+        G.GAME.OLD_SHOP_RETURN_replace = nil
+    end
+    G_FUNCS_hand_text_UI_set_ref(e)
+end
+
+local G_FUNCS_hand_chip_total_UI_set_ref = G.FUNCS.hand_chip_total_UI_set
+G.FUNCS.hand_chip_total_UI_set = function(e)
+    if G.NEW_SHOP_ENTER and (G.GAME.current_round.current_hand.chip_total >= 1 or G.GAME.current_round.current_hand.handname ~= '') and G.NEW_SHOP_ENTER.alignment.offset.y > -15 then
+        G.NEW_SHOP_ENTER.alignment.offset.y = -15
+        G.GAME.NEW_SHOP_ENTER_replace = true
+    elseif G.NEW_SHOP_ENTER and (G.GAME.current_round.current_hand.chip_total < 1 and G.GAME.current_round.current_hand.handname == '') and G.NEW_SHOP_ENTER.alignment.offset.y < 0.03 and G.GAME.NEW_SHOP_ENTER_replace then
+        G.NEW_SHOP_ENTER.alignment.offset.y = 0.03
+        G.GAME.NEW_SHOP_ENTER_replace = nil
+    end
+    if G.OLD_SHOP_RETURN and (G.GAME.current_round.current_hand.chip_total >= 1 or G.GAME.current_round.current_hand.handname ~= '') and G.OLD_SHOP_RETURN.alignment.offset.y > -15 then
+        G.OLD_SHOP_RETURN.alignment.offset.y = -15
+        G.GAME.OLD_SHOP_RETURN_replace = true
+    elseif G.OLD_SHOP_RETURN and (G.GAME.current_round.current_hand.chip_total < 1 and G.GAME.current_round.current_hand.handname == '') and G.OLD_SHOP_RETURN.alignment.offset.y < 0.03 and G.GAME.OLD_SHOP_RETURN_replace then
+        G.OLD_SHOP_RETURN.alignment.offset.y = 0.03
+        G.GAME.OLD_SHOP_RETURN_replace = nil
+    end
+    G_FUNCS_hand_chip_total_UI_set_ref(e)
+end
+
 G.FUNCS.can_buy_new_touch = function(_card)
     if _card.ability.supply and _card.area == G.new_shop_deposit and G.GAME.new_shop and G.new_shop then
         if _card.ability.as_tag and (_card.cost > G.GAME.dollars - G.GAME.bankrupt_at) and (_card.cost > 0) then
