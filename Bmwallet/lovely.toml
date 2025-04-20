@@ -1234,9 +1234,8 @@ overwrite = false
 [patches.pattern]
 target = "functions/button_callbacks.lua"
 pattern = '''G.SHOP_SIGN.alignment.offset.y = -15'''
-position = "before"
+position = "after"
 payload = '''
-          G.SHOP_SIGN.alignment.offset.y = -15
           G.NEW_SHOP_ENTER.alignment.offset.y = -15
 '''
 match_indent = false
@@ -1245,8 +1244,8 @@ overwrite = false
 [[patches]]
 [patches.pattern]
 target = "functions/button_callbacks.lua"
-pattern = '''G.SHOP_SIGN:remove()'''
-position = "before"
+pattern = '''G.SHOP_SIGN = nil'''
+position = "after"
 payload = '''
           G.NEW_SHOP_ENTER:remove()
           G.NEW_SHOP_ENTER = nil
