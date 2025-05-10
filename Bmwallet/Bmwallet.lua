@@ -4,7 +4,7 @@
 --- MOD_AUTHOR: [BaiMao]
 --- MOD_DESCRIPTION: Let you have one wallet and play games more freely
 --- BADGE_COLOUR: A64E91
---- VERSION: 1.0.4f-Zeta
+--- VERSION: 1.0.4f-Eta
 ----------------------------------------------
 ------------MOD CODE -------------------------
 
@@ -1733,15 +1733,15 @@ function eval_card(card, context)
         local f_chips = card:get_f_chips()
         local f_mult = card:get_f_mult()
         local f_x_mult = card:get_f_x_mult()
-        ret.forging_card = {}
+        ret.individual = {}
         if f_chips > 0 then
-            ret.forging_card.f_chips = f_chips
+            ret.individual.f_chips = f_chips
         end
         if f_mult > 0 then
-            ret.forging_card.f_mult = f_mult
+            ret.individual.f_mult = f_mult
         end
         if f_x_mult > 1 then
-            ret.forging_card.f_x_mult = f_x_mult
+            ret.individual.f_x_mult = f_x_mult
         end
     end
     return ret, post_trig
