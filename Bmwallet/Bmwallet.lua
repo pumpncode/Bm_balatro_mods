@@ -153,15 +153,14 @@ end
 
 local G_UIDEF_use_and_sell_buttons_ref = G.UIDEF.use_and_sell_buttons
 function G.UIDEF.use_and_sell_buttons(card)
+    local ret = G_UIDEF_use_and_sell_buttons_ref(card)
+    local mid = ret.nodes[1].config
     if card.ability.consumeable and card.area and (card.area == G.pack_cards) then
-        return {n=G.UIT.ROOT, config = {padding = 0, colour = G.C.CLEAR}, nodes={
-            {n=G.UIT.R, config={ref_table = card, r = 0.08, padding = 0.1, align = "bm", minw = 0.5*card.T.w - 0.15, minh = 0.8*card.T.h, maxw = 0.7*card.T.w - 0.15, hover = true, shadow = true, colour = G.C.UI.BACKGROUND_INACTIVE, one_press = true, button = 'use_card', func = 'can_use_consumeable'}, nodes={
-                {n=G.UIT.T, config={text = localize('b_use'),colour = G.C.UI.TEXT_LIGHT, scale = 0.55, shadow = true}}
-            }},
-        }}
-    else
-        return G_UIDEF_use_and_sell_buttons_ref(card)
+        if mid.mid then
+            mid.mid = nil
+        end
     end
+    return ret
 end
 
 G.FUNCS.can_sell_card_ref_2 = function(e)
