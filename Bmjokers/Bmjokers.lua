@@ -4,7 +4,7 @@
 --- MOD_AUTHOR: [BaiMao]
 --- MOD_DESCRIPTION: Create more powerful jokers
 --- BADGE_COLOUR: A64E91
---- VERSION: 1.0.4i
+--- VERSION: 1.0.4j
 ----------------------------------------------
 ------------MOD CODE -------------------------
 
@@ -170,6 +170,20 @@ function Card:calculate_joker(context)
         else
             return ret
         end
+    end
+end
+
+local SMODS_calculate_effect_table_key_ref = SMODS.calculate_effect_table_key
+SMODS.calculate_effect_table_key = function(effect_table, key, card, ret)
+    if key == 'jokers' then
+        for k, v in pairs(effect_table) do
+            if type(v) == 'table' and k:sub(1,6) == 'jokers' then
+                local calc = SMODS.calculate_effect(v, card)
+                for kk, vv in pairs(calc) do ret[kk] = vv end
+            end
+        end
+    else
+        SMODS_calculate_effect_table_key_ref(effect_table, key, card, ret)
     end
 end
 
