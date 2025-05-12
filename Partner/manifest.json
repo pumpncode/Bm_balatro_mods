@@ -6,7 +6,7 @@
     "description": "Add interesting partners to your Balatro. Thanks to brookling, snowylight, betmma",
     "prefix": "partner",
     "main_file": "partner.lua",
-    "priority": 10,
+    "priority": -10,
     "badge_colour": "A64E91",
     "version": "1.0.1d",
     "dependencies": [
