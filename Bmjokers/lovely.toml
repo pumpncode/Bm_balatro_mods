@@ -80,7 +80,7 @@ overwrite = false
 [[patches]]
 [patches.pattern]
 target = "card.lua"
-pattern = "local other_joker_ret = other_joker:calculate_joker(context)"
+pattern = "context.blueprint_card = old_context_blueprint_card"
 position = "after"
 payload = '''
 --[[
@@ -140,4 +140,23 @@ payload = '''
                 i = i+1
 '''
 match_indent = false
+overwrite = false
+
+[[patches]]
+[patches.pattern]
+target = "functions/state_events.lua"
+pattern = "joker_eval.jokers.juice_card = _joker"
+position = "at"
+payload = '''
+if joker_eval.jokers then
+    joker_eval.jokers.juice_card = _joker
+else
+    for k, v in pairs(joker_eval) do
+        if string.find(k, 'jokers') then
+            v.juice_card = _joker
+        end
+    end
+end
+'''
+match_indent = true
 overwrite = false
