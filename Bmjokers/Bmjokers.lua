@@ -150,10 +150,10 @@ function Card:calculate_joker(context)
     local ret = Card_calculate_joker_ref(self, context)
     if ret then
         if self.ability.retriggers and self.ability.retriggers >= 1 then
-            if ret.microchiped then
-                local final_ret = {microchiped = true}
+            if ret.duplication then
+                local final_ret = {duplication = true}
                 for k, v in ipairs(ret) do
-                    if k ~= microchiped then
+                    if k ~= duplication then
                         for i = 1, self.ability.retriggers + 1 do
                             final_ret[#final_ret + 1] = v
                         end
@@ -161,7 +161,7 @@ function Card:calculate_joker(context)
                 end
                 return final_ret
             else
-                local final_ret = {microchiped = true}
+                local final_ret = {duplication = true}
                 for i = 1, self.ability.retriggers + 1 do
                     final_ret[#final_ret + 1] = ret
                 end
@@ -628,10 +628,10 @@ SMODS.Joker{
             context.blueprint = nil
             local eff_card = context.blueprint_card or card
             context.blueprint_card = nil
-            if other_joker_ret and other_joker_ret.microchiped then
-                local final_ret = {microchiped = true}
+            if other_joker_ret and other_joker_ret.duplication then
+                local final_ret = {duplication = true}
                 for k, v in ipairs(other_joker_ret) do
-                    if k ~= microchiped then
+                    if k ~= duplication then
                         v.card = eff_card
                         v.colour = G.C.GREEN
                         for i = 1, 2 do
@@ -643,7 +643,7 @@ SMODS.Joker{
             elseif other_joker_ret then
                 other_joker_ret.card = eff_card
                 other_joker_ret.colour = G.C.GREEN
-                local final_ret = {microchiped = true}
+                local final_ret = {duplication = true}
                 for i = 1, 2 do
                     final_ret[#final_ret + 1] = other_joker_ret
                 end
