@@ -43,9 +43,9 @@ target = "functions/common_events.lua"
 pattern = "ret.jokers = jokers"
 position = "at"
 payload = '''
-if jokers and jokers.microchiped then
+if jokers and jokers.duplication then
     for k, v in ipairs(jokers) do
-        if k ~= microchiped then
+        if k ~= duplication then
             ret['jokers'..k] = v
         end
     end
@@ -95,12 +95,10 @@ pattern = "return other_joker_ret"
 position = "before"
 payload = '''
 ]]
-                if other_joker_ret and other_joker_ret.microchiped then
+                if other_joker_ret and other_joker_ret.duplication then
                     for k, v in ipairs(other_joker_ret) do
-                        if k ~= microchiped then
-                            v.card = eff_card
-                            v.colour = self.ability.name == "Blueprint" and G.C.BLUE or G.C.RED
-                        end
+                        v.card = eff_card
+                        v.colour = self.ability.name == "Blueprint" and G.C.BLUE or G.C.RED
                     end
                     return other_joker_ret
                 elseif other_joker_ret then
