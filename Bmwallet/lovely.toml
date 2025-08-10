@@ -1,5 +1,5 @@
 [manifest]
-version = "1.0.4f-Eta"
+version = "1.0.4f-Theta"
 dump_lua = true
 priority = 0
 
@@ -810,39 +810,22 @@ overwrite = false
 [[patches]]
 [patches.pattern]
 target = "engine/controller.lua"
-pattern = '''--if not, was the Cursor dragging some other thing?'''
-position = "after"
-payload = '''
---[[
-'''
-match_indent = false
-overwrite = false
-
-[[patches]]
-[patches.pattern]
-target = "engine/controller.lua"
-pattern = '''--Cursor is currently hovering over something'''
+pattern = '''self.cursor_up.handled = true'''
 position = "before"
 payload = '''
-]]
-                end
-            elseif self.dragging.prev_target then 
-                local releasable = nil
-                for _, v in ipairs(self.collision_list) do
-                    if v.states.hover.can and (not v.states.drag.is) and (v ~= self.dragging.prev_target) then
-                        releasable = v
-                        break 
-                    end
-                end
-                if releasable and releasable.states.release_on.can then 
-                    self.released_on.target = releasable
-                    self.released_on.handled = false
+        if self.cursor_down.target and self.dragging.prev_target then
+            local releasable = nil
+            for _, v in ipairs(self.collision_list) do
+                if v.states.hover.can and (not v.states.drag.is) and (v ~= self.dragging.prev_target) then
+                    releasable = v
+                    break 
                 end
             end
+            if releasable and releasable.states.release_on.can then 
+                self.released_on.target = releasable
+                self.released_on.handled = false
+            end
         end
-        self.cursor_up.handled = true
-    end
-
 '''
 match_indent = false
 overwrite = false
@@ -853,6 +836,11 @@ target = "engine/controller.lua"
 pattern = '''--The object being dragged'''
 position = "before"
 payload = '''
+    if self.is_cursor_down then 
+        self.cursor_down.distance = math.max(Vector_Dist(self.cursor_down.T, self.cursor_hover.T), self.cursor_down.distance or 0)
+    else
+        self.cursor_down.distance = nil
+    end
     if not self.dragging.handled and self.cursor_down.distance and (self.cursor_down.distance > 0.2) then
         create_drag_target_from_card(self.dragging.target)
         self.dragging.handled = true
@@ -865,56 +853,12 @@ overwrite = false
 [[patches]]
 [patches.pattern]
 target = "engine/controller.lua"
-pattern = '''--The object released on'''
-position = "after"
+pattern = '''if not self.released_on.handled and self.dragging.prev_target then'''
+position = "at"
 payload = '''
---[[
+if not self.released_on.handled and self.released_on.target and self.dragging.prev_target then
 '''
-match_indent = false
-overwrite = false
-
-[[patches]]
-[patches.pattern]
-target = "engine/controller.lua"
-pattern = '''--The object being hovered over'''
-position = "before"
-payload = '''
-]]
-    if not self.released_on.handled and self.dragging.prev_target then
-        self.released_on.target:release(self.dragging.prev_target)
-        self.released_on.handled = true
-    end
-'''
-match_indent = false
-overwrite = false
-
-[[patches]]
-[patches.pattern]
-target = "engine/controller.lua"
-pattern = '''if self.hovering.target and self.hovering.target == self.dragging.target and not self.HID.touch then'''
-position = "before"
-payload = '''
-    if self.is_cursor_down then 
-        self.cursor_down.distance = math.max(Vector_Dist(self.cursor_down.T, self.cursor_hover.T), self.cursor_down.distance or 0)
-    end
-    if not self.is_cursor_down then
-        if self.cursor_down.target then
-            self.cursor_down.duration = nil
-        end
-    end
-'''
-match_indent = false
-overwrite = false
-
-[[patches]]
-[patches.pattern]
-target = "engine/controller.lua"
-pattern = '''if not self.cursor_down.handled then'''
-position = "after"
-payload = '''
-    self.cursor_down.distance = 0
-'''
-match_indent = false
+match_indent = true
 overwrite = false
 
 [[patches]]
@@ -1252,3 +1196,4 @@ payload = '''
 '''
 match_indent = false
 overwrite = false
+
