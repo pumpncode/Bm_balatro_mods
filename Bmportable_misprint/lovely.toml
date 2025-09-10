@@ -1,0 +1,38 @@
+[manifest]
+version = "1.0.1c"
+dump_lua = true
+priority = 0
+
+[[patches]]
+[patches.pattern]
+target = "functions/state_events.lua"
+pattern = '''check_and_set_high_score('hand', hand_chips*mult)'''
+position = "before"
+payload = '''
+G.GAME.history_hands = G.GAME.history_hands or {}
+local current_hand = {}
+current_hand.handname = text
+current_hand.disp_handname = disp_text
+current_hand.level = G.GAME.hands[text].level
+current_hand.chips = hand_chips
+current_hand.mult = mult
+current_hand.chip_total = math.floor(hand_chips*mult)
+current_hand.cards = {}
+for k, v in pairs(G.play.cards) do
+    local score = nil
+    for kk, vv in pairs(scoring_hand) do
+        if v == vv then score = true break end
+    end
+    local rank_fix = 'A'
+    if v.config.card.value == '10' then
+        rank_fix = 'T'
+    else
+        rank_fix = string.sub(v.config.card.value, 1, 1)
+    end
+    table.insert(current_hand.cards, {suit_rank = string.sub(v.config.card.suit, 1, 1)..'_'..rank_fix, enhancement = v.config.center.key, edition = v.edition, seal = v.seal, score = score})
+end
+table.insert(G.GAME.history_hands, current_hand)
+if G.GAME.chips + current_hand.chip_total >= G.GAME.blind.chips then current_hand.filter = true end
+'''
+match_indent = true
+overwrite = false

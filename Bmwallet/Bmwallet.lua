@@ -4,7 +4,7 @@
 --- MOD_AUTHOR: [BaiMao]
 --- MOD_DESCRIPTION: Let you have one wallet and play games more freely
 --- BADGE_COLOUR: A64E91
---- VERSION: 1.0.4f-Eta
+--- VERSION: 1.0.4f-Theta
 ----------------------------------------------
 ------------MOD CODE -------------------------
 
