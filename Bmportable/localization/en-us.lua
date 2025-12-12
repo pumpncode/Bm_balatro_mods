@@ -21,7 +21,7 @@ return {
             k_flash_load = "Flash Load",
             k_score_display = "Score Display",
             k_reduce_animation = "Reduce Animation",
-            ph_select_achievement = "Select a Achievement",
+            ph_select_achievement = "Select an Achievement",
             k_manual_save={
                 "Manual Save",
             },
