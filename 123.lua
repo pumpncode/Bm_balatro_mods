@@ -48,6 +48,7 @@ function Card:align()
 end
 
 function Card:flip()
+    if self.children.sell_button then self.children.sell_button:remove(); self.children.sell_button = nil end
     if self.facing == 'front' then 
         self.flipping = 'f2b'
         self.facing='back'
@@ -84,7 +85,7 @@ function Card:update(dt)
     end
 
     self:update_alert()
-    if self.ability.set == 'Joker' and not self.sticker_run then 
+    if self.ability.set == 'Joker' and not self.sticker_run then
         self.sticker_run = get_joker_win_sticker(self.config.center) or 'NONE'
     end
 
@@ -268,7 +269,9 @@ function Card:stop_hover()
 end
 
 function Card:juice_up(scale, rot_amount)
+    if G.SETTINGS.reduce_animation then return end
     --G.VIBRATION = G.VIBRATION + 0.4
+    G.MOBILE_VIBRATION_QUEUE = disable_rumble and 0 or math.max(G.MOBILE_VIBRATION_QUEUE or 0, 1)
     local rot_amt = rot_amount and 0.4*(math.random()>0.5 and 1 or -1)*rot_amount or (math.random()>0.5 and 1 or -1)*0.16
     scale = scale and scale*0.4 or 0.11
     Moveable.juice_up(self, scale, rot_amt)
@@ -336,6 +339,7 @@ function Card:draw(layer)
             end
         end
         if self.children.use_button and self.highlighted then self.children.use_button:draw() end
+        if self.children.sell_button and self.highlighted then self.children.sell_button:draw() end
 
         if self.vortex then
             if self.facing == 'back' then 
@@ -498,7 +502,7 @@ function Card:draw(layer)
         end
 
         for k, v in pairs(self.children) do
-            if k ~= 'focused_ui' and k ~= "front" and k ~= "back" and k ~= "soul_parts" and k ~= "center" and k ~= 'floating_sprite' and k~= "shadow" and k~= "use_button" and k ~= 'buy_button' and k ~= 'buy_and_use_button' and k~= "debuff" and k ~= 'price' and k~= 'particles' and k ~= 'h_popup' then v:draw() end
+            if k ~= 'focused_ui' and k ~= "front" and k ~= "back" and k ~= "soul_parts" and k ~= "center" and k ~= 'floating_sprite' and k~= "shadow" and k~= "use_button" and k~= "sell_button" and k ~= 'buy_button' and k ~= 'buy_and_use_button' and k~= "debuff" and k ~= 'price' and k~= 'particles' and k ~= 'h_popup' then v:draw() end
         end
 
         if (layer == 'card' or layer == 'both') and self.area == G.hand then 
@@ -518,7 +522,7 @@ end
 
 function Card:highlight(is_higlighted)
     self.highlighted = is_higlighted
-    if self.ability.consumeable or self.ability.set == 'Joker' or (self.area and self.area == G.pack_cards) then
+    if self.ability.consumeable or self.ability.set == 'Joker' or (self.area and self.area == G.pack_cards) or ((self.area and self.area == G.hand) and G.STATE == G.STATES.STANDARD_PACK) then
         if self.highlighted and self.area and self.area.config.type ~= 'shop' then
             local x_off = (self.ability.consumeable and -0.1 or 0)
             self.children.use_button = UIBox{
@@ -534,6 +538,15 @@ function Card:highlight(is_higlighted)
         elseif self.children.use_button then
             self.children.use_button:remove()
             self.children.use_button = nil
+        end
+        if self.highlighted and (((self.area and self.area == G.pack_cards) and (self.ability.set == 'Tarot' or self.ability.set == 'Spectral')) or ((self.area and self.area == G.hand) and G.STATE == G.STATES.STANDARD_PACK and G.GAME.STANDARD_PACK_SELL and G.GAME.STANDARD_PACK_SELL >= 1)) then
+            self.children.sell_button = UIBox{
+                definition = G.UIDEF.sell_buttons(self), 
+                config = {align = self.ability.consumeable and "cr" or "bmi", offset = self.ability.consumeable and {x=-0.35,y=0} or {x=0,y=0.55}, parent = self}
+            }
+        elseif self.children.sell_button then
+            self.children.sell_button:remove()
+            self.children.sell_button = nil
         end
     end
     if self.ability.consumeable or self.ability.set == 'Joker' then
@@ -557,6 +570,7 @@ function Card:click()
     if self.area and self.area == G.deck and self.area.cards[1] == self then 
         G.FUNCS.deck_info()
     end
+    G.MOBILE_VIBRATION_QUEUE = math.max(G.MOBILE_VIBRATION_QUEUE or 0, 1)
 end
 
 function Card:save()
