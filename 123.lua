@@ -72,6 +72,7 @@ function Card:calculate_joker(context)
                 G.E_MANAGER:add_event(Event({
                     func = (function()
                         add_tag(Tag('tag_double'))
+                        add_tag(Tag('tag_double'))
                         play_sound('generic1', 0.9 + math.random()*0.1, 0.8)
                         play_sound('holo1', 1.2 + math.random()*0.1, 0.4)
                         return true
@@ -90,8 +91,11 @@ function Card:calculate_joker(context)
                 if #jokers > 0 then 
                     if #G.jokers.cards <= G.jokers.config.card_limit then 
                         card_eval_status_text(context.blueprint_card or self, 'extra', nil, nil, nil, {message = localize('k_duplicated_ex')})
-                        local chosen_joker = pseudorandom_element(jokers, pseudoseed('invisible'))
-                        local card = copy_card(chosen_joker, nil, nil, nil, chosen_joker.edition and chosen_joker.edition.negative)
+                        local chosen_joker = G.jokers.cards[1]
+                        if chosen_joker.ability.eternal then chosen_joker.ability.eternal = nil end
+                        if chosen_joker.ability.perishable then chosen_joker.ability.perishable = nil end
+                        if chosen_joker.ability.rental then chosen_joker.ability.rental = nil end
+                        local card = copy_card(chosen_joker)
                         if card.ability.invis_rounds then card.ability.invis_rounds = 0 end
                         card:add_to_deck()
                         G.jokers:emplace(card)
@@ -103,6 +107,16 @@ function Card:calculate_joker(context)
                 end
             end
         elseif context.selling_card then
+            if self.ability.name == 'Showman' and not context.blueprint and not self.ability.extra then
+                for i = 1, #G.jokers.cards do
+                    if G.jokers.cards[i] == self and G.jokers.cards[i + 1] == context.card then
+                        self.ability.extra = context.card.config.center_key
+                        G.E_MANAGER:add_event(Event({func = function()
+                            card_eval_status_text(self, 'extra', nil, nil, nil, {message = localize('k_copied_ex')})
+                        return true end}))
+                    end
+                end
+            end
                 if self.ability.name == 'Campfire' and not context.blueprint then
                     self.ability.x_mult = self.ability.x_mult + self.ability.extra
                     G.E_MANAGER:add_event(Event({
@@ -111,6 +125,30 @@ function Card:calculate_joker(context)
                 end
             return
         elseif context.reroll_shop then
+            if self.ability.name == 'Seance' and #G.consumeables.cards + G.GAME.consumeable_buffer < G.consumeables.config.card_limit then
+                if pseudorandom('seance') < G.GAME.probabilities.normal/self.ability.extra then
+                    G.GAME.consumeable_buffer = G.GAME.consumeable_buffer + 1
+                    G.E_MANAGER:add_event(Event({
+                        trigger = 'before',
+                        delay = 0.0,
+                        func = (function()
+                                local card = create_card('Spectral', G.consumeables, nil, nil, nil, nil, nil, 'sea')
+                                card:add_to_deck()
+                                G.consumeables:emplace(card)
+                                G.GAME.consumeable_buffer = 0
+                            return true
+                        end)}))
+                    card_eval_status_text(context.blueprint_card or self, 'extra', nil, nil, nil, {message = localize('k_plus_spectral'), colour = G.C.SECONDARY_SET.Spectral})
+                end
+            end
+            if self.ability.name == 'Obelisk' and not context.blueprint then
+                if self.ability.x_mult > 1 then
+                    self.ability.x_mult = 1
+                    G.E_MANAGER:add_event(Event({func = (function()
+                        card_eval_status_text(self, 'jokers', nil, nil, nil, {message = localize('k_reset'), colour = G.C.MULT})
+                    return true end)}))
+                end
+            end
             if self.ability.name == 'Flash Card' and not context.blueprint then
                 self.ability.mult = self.ability.mult + self.ability.extra
                 G.E_MANAGER:add_event(Event({
@@ -120,12 +158,17 @@ function Card:calculate_joker(context)
                 end)}))
             end
         elseif context.ending_shop then
+            if self.ability.name == 'Ceremonial Dagger' and not context.blueprint then
+                self.ability.juice = true
+                local eval = function() return self.ability.juice end
+                juice_card_until(self, eval, true)
+            end
             if self.ability.name == 'Perkeo' then
                 if G.consumeables.cards[1] then
                     G.E_MANAGER:add_event(Event({
                         func = function() 
                             local card = copy_card(pseudorandom_element(G.consumeables.cards, pseudoseed('perkeo')), nil)
-                            card:set_edition({negative = true}, true)
+                            card:set_edition({negative = true}, true, true)
                             card:add_to_deck()
                             G.consumeables:emplace(card) 
                             return true
@@ -142,7 +185,7 @@ function Card:calculate_joker(context)
                         card_eval_status_text(self, 'extra', nil, nil, nil, {
                             message = localize{type = 'variable', key = 'a_xmult', vars = {self.ability.x_mult}},
                                 colour = G.C.RED,
-                            card = self
+                            
                         }) 
                         return true
                     end}))
@@ -157,7 +200,7 @@ function Card:calculate_joker(context)
                             message = localize{type = 'variable', key = 'a_mult', vars = {self.ability.extra}},
                             colour = G.C.RED,
                             delay = 0.45, 
-                            card = self
+                            
                         }) 
                         return true
                     end}))
@@ -182,6 +225,7 @@ function Card:calculate_joker(context)
                         elseif seal_type > 0.25 then _card:set_seal('Gold', true)
                         else _card:set_seal('Purple', true)
                         end
+                        _card:set_ability(pseudorandom_element(G.P_CENTER_POOLS['Enhanced'], pseudoseed('certsl')))
                         G.GAME.blind:debuff_card(_card)
                         G.hand:sort()
                         if context.blueprint_card then context.blueprint_card:juice_up() else self:juice_up() end
@@ -198,6 +242,10 @@ function Card:calculate_joker(context)
                 local eval = function() return G.GAME.current_round.discards_used == 0 and not G.RESET_JIGGLES end
                 juice_card_until(self, eval, true)
             end
+            if self.ability.name == 'Burnt Joker' and not context.blueprint then
+                local eval = function() return G.GAME.current_round.discards_used == 0 and not G.RESET_JIGGLES end
+                juice_card_until(self, eval, true)
+            end
         elseif context.setting_blind and not self.getting_sliced then
             if self.ability.name == 'Chicot' and not context.blueprint
             and context.blind.boss and not self.getting_sliced then
@@ -210,6 +258,17 @@ function Card:calculate_joker(context)
                     card_eval_status_text(self, 'extra', nil, nil, nil, {message = localize('ph_boss_disabled')})
                 return true end }))
             end
+            if self.ability.name == 'Showman' and not context.blueprint and context.blind.boss and self.ability.extra then
+            card_eval_status_text(self, 'extra', nil, nil, nil, {message = localize('k_plus_joker')})
+            for i = 1, 2 do
+                local _card = create_card('Joker', G.jokers, nil, nil, nil, nil, self.ability.extra, 'rin')
+                _card:set_edition({negative = true}, true, true)
+                _card:add_to_deck()
+                G.jokers:emplace(_card)
+                _card:start_materialize()
+            end
+            self.ability.extra = nil
+        end
             if self.ability.name == 'Madness' and not context.blueprint and not context.blind.boss then
                 self.ability.x_mult = self.ability.x_mult + self.ability.extra
                 local destructable_jokers = {}
@@ -234,6 +293,12 @@ function Card:calculate_joker(context)
                     ease_discard(-G.GAME.current_round.discards_left, nil, true)
                     ease_hands_played(self.ability.extra)
                     card_eval_status_text(context.blueprint_card or self, 'extra', nil, nil, nil, {message = localize{type = 'variable', key = 'a_hands', vars = {self.ability.extra}}})
+                return true end }))
+            end
+            if self.ability.name == 'Merry Andy' and not (context.blueprint_card or self).getting_sliced then
+                G.E_MANAGER:add_event(Event({func = function()
+                    ease_discard(self.ability.d_size)
+                    card_eval_status_text(context.blueprint_card or self, 'extra', nil, nil, nil, {message = localize('b_discard'), colour = G.C.RED})
                 return true end }))
             end
             if self.ability.name == 'Riff-raff' and not (context.blueprint_card or self).getting_sliced and #G.jokers.cards + G.GAME.joker_buffer < G.jokers.config.card_limit then
@@ -269,6 +334,7 @@ function Card:calculate_joker(context)
                     end)}))
             end
             if self.ability.name == 'Ceremonial Dagger' and not context.blueprint then
+                self.ability.juice = nil
                 local my_pos = nil
                 for i = 1, #G.jokers.cards do
                     if G.jokers.cards[i] == self then my_pos = i; break end
@@ -294,6 +360,13 @@ function Card:calculate_joker(context)
                         G.playing_card = (G.playing_card and G.playing_card + 1) or 1
                         local card = Card(G.play.T.x + G.play.T.w/2, G.play.T.y, G.CARD_W, G.CARD_H, front, G.P_CENTERS.m_stone, {playing_card = G.playing_card})
                         card:start_materialize({G.C.SECONDARY_SET.Enhanced})
+                        local edition_poll = pseudorandom(pseudoseed('marb_e'))
+                        local edition = {}
+                        if edition_poll > 1 - 0.15 then edition.polychrome = true
+                        elseif edition_poll > 0.5 then edition.holo = true
+                        else edition.foil = true
+                        end
+                        card:set_edition(edition)
                         G.play:emplace(card)
                         table.insert(G.playing_cards, card)
                         return true
@@ -311,8 +384,8 @@ function Card:calculate_joker(context)
             end
             return
         elseif context.destroying_card and not context.blueprint then
-            if self.ability.name == 'Sixth Sense' and #context.full_hand == 1 and context.full_hand[1]:get_id() == 6 and G.GAME.current_round.hands_played == 0 then
-                if #G.consumeables.cards + G.GAME.consumeable_buffer < G.consumeables.config.card_limit then
+            if self.ability.name == 'Sixth Sense' and G.GAME.current_round.hands_played == 0 and #context.full_hand == 1 then
+                if context.full_hand[1]:get_id() == 6 and #G.consumeables.cards + G.GAME.consumeable_buffer < G.consumeables.config.card_limit then
                     G.GAME.consumeable_buffer = G.GAME.consumeable_buffer + 1
                     G.E_MANAGER:add_event(Event({
                         trigger = 'before',
@@ -325,8 +398,10 @@ function Card:calculate_joker(context)
                             return true
                         end)}))
                     card_eval_status_text(context.blueprint_card or self, 'extra', nil, nil, nil, {message = localize('k_plus_spectral'), colour = G.C.SECONDARY_SET.Spectral})
+                else
+                    card_eval_status_text(context.blueprint_card or self, 'extra', nil, nil, nil, {message = localize('k_eroded_ex')})
                 end
-               return true
+                return true
             end
             return nil
         elseif context.cards_destroyed then
@@ -397,7 +472,7 @@ function Card:calculate_joker(context)
             if self.ability.name == 'Glass Joker' and not context.blueprint then
                 local glass_cards = 0
                 for k, val in ipairs(context.removed) do
-                    if val.shattered then glass_cards = glass_cards + 1 end
+                    if val.ability.name == 'Glass Card' then glass_cards = glass_cards + 1 end
                 end
                 if glass_cards > 0 then 
                     G.E_MANAGER:add_event(Event({
@@ -416,19 +491,6 @@ function Card:calculate_joker(context)
                 return
             end
         elseif context.using_consumeable then
-            if self.ability.name == 'Glass Joker' and not context.blueprint and context.consumeable.ability.name == 'The Hanged Man'  then
-                local shattered_glass = 0
-                for k, val in ipairs(G.hand.highlighted) do
-                    if val.ability.name == 'Glass Card' then shattered_glass = shattered_glass + 1 end
-                end
-                if shattered_glass > 0 then
-                    self.ability.x_mult = self.ability.x_mult + self.ability.extra*shattered_glass
-                    G.E_MANAGER:add_event(Event({
-                        func = function() card_eval_status_text(self, 'extra', nil, nil, nil, {message = localize{type='variable',key='a_xmult',vars={self.ability.x_mult}}}); return true
-                        end}))
-                end
-                return
-            end
             if self.ability.name == 'Fortune Teller' and not context.blueprint and (context.consumeable.ability.set == "Tarot") then
                 G.E_MANAGER:add_event(Event({
                     func = function() card_eval_status_text(self, 'extra', nil, nil, nil, {message = localize{type='variable',key='a_mult',vars={G.GAME.consumeable_usage_total.tarot}}}); return true
@@ -447,7 +509,11 @@ function Card:calculate_joker(context)
                 if G.GAME.blind.triggered then 
                     ease_dollars(self.ability.extra)
                     G.GAME.dollar_buffer = (G.GAME.dollar_buffer or 0) + self.ability.extra
-                    G.E_MANAGER:add_event(Event({func = (function() G.GAME.dollar_buffer = 0; return true end)}))
+                    if G.SETTINGS.reduce_animation then
+                        G.GAME.dollar_buffer = 0
+                    else
+                        G.E_MANAGER:add_event(Event({func = (function() G.GAME.dollar_buffer = 0; return true end)}))
+                    end
                     return {
                         message = localize('$')..self.ability.extra,
                         dollars = self.ability.extra,
@@ -456,11 +522,14 @@ function Card:calculate_joker(context)
                 end
             end
         elseif context.pre_discard then
+            if self.ability.name == 'Delayed Gratification' and not context.blueprint and G.GAME.current_round.discards_used <= 0 then
+                card_eval_status_text(self, 'extra', nil, nil, nil, {message = localize('k_no_reward'), colour = G.C.RED})
+            end
             if self.ability.name == 'Burnt Joker' and G.GAME.current_round.discards_used <= 0 and not context.hook then
                 local text,disp_text = G.FUNCS.get_poker_hand_info(G.hand.highlighted)
                 card_eval_status_text(context.blueprint_card or self, 'extra', nil, nil, nil, {message = localize('k_upgrade_ex')})
                 update_hand_text({sound = 'button', volume = 0.7, pitch = 0.8, delay = 0.3}, {handname=localize(text, 'poker_hands'),chips = G.GAME.hands[text].chips, mult = G.GAME.hands[text].mult, level=G.GAME.hands[text].level})
-                level_up_hand(context.blueprint_card or self, text, nil, 1)
+                level_up_hand(context.blueprint_card or self, text, nil, 2)
                 update_hand_text({sound = 'button', volume = 0.7, pitch = 1.1, delay = 0}, {mult = 0, chips = 0, handname = '', level = ''})
             end
         elseif context.discard then
@@ -490,6 +559,7 @@ function Card:calculate_joker(context)
                     self.ability.x_mult = self.ability.x_mult - self.ability.extra
                     return {
                         delay = 0.2,
+                        card = self,
                         message = localize{type='variable',key='a_xmult_minus',vars={self.ability.extra}},
                         colour = G.C.RED
                     }
@@ -517,20 +587,26 @@ function Card:calculate_joker(context)
                     colour = G.C.MONEY,
                     delay = 0.45, 
                     remove = true,
-                    card = self
+                    card = self,
                 }
             end
             
-            if self.ability.name == 'Castle' and
-            not context.other_card.debuff and
-            context.other_card:is_suit(G.GAME.current_round.castle_card.suit) and not context.blueprint then
-                self.ability.extra.chips = self.ability.extra.chips + self.ability.extra.chip_mod
-                  
-                return {
-                    message = localize('k_upgrade_ex'),
-                    card = self,
-                    colour = G.C.CHIPS
-                }
+            if self.ability.name == 'Castle' and context.other_card == context.full_hand[#context.full_hand] and not context.blueprint then
+                local all_castle_suit = true
+                for k, v in ipairs(context.full_hand) do
+                    if not v:is_suit(G.GAME.current_round.castle_card.suit, nil, true) then
+                        all_castle_suit = false
+                        break
+                    end
+                end
+                if all_castle_suit then
+                    self.ability.extra.chips = self.ability.extra.chips + self.ability.extra.chip_mod
+                    return {
+                        message = localize('k_upgrade_ex'),
+                        card = self,
+                        colour = G.C.CHIPS
+                    }
+                end
             end
             if self.ability.name == 'Mail-In Rebate' and
             not context.other_card.debuff and
@@ -539,19 +615,29 @@ function Card:calculate_joker(context)
                 return {
                     message = localize('$')..self.ability.extra,
                     colour = G.C.MONEY,
-                    card = self
+                    card = self,
                 }
             end
-            if self.ability.name == 'Hit the Road' and
-            not context.other_card.debuff and
-            context.other_card:get_id() == 11 and not context.blueprint then
+            if self.ability.name == 'Hit the Road' and not context.blueprint and not context.other_card.debuff and context.other_card:get_id() == 11 then
                 self.ability.x_mult = self.ability.x_mult + self.ability.extra
-                return {
-                    message = localize{type='variable',key='a_xmult',vars={self.ability.x_mult}},
-                        colour = G.C.RED,
-                        delay = 0.45, 
-                    card = self
-                }
+                for i = 1, #context.full_hand do
+                    if context.full_hand[i] == context.other_card then
+                        for j = i + 1, #context.full_hand do
+                            if context.full_hand[j]:get_id() == 11 and not context.full_hand[j].debuff then
+                                return {
+                                    remove = true,
+                                    no_message = true
+                                }
+                            end
+                        end
+                        return {
+                            message = localize{type = 'variable', key = 'a_xmult', vars = {self.ability.x_mult}},
+                            colour = G.C.RED,
+                            remove = true,
+                            card = self,
+                        }
+                    end
+                end
             end
             if self.ability.name == 'Green Joker' and not context.blueprint and context.other_card == context.full_hand[#context.full_hand] then
                 local prev_mult = self.ability.mult
@@ -596,6 +682,21 @@ function Card:calculate_joker(context)
                     end
                 end
             elseif not context.blueprint then
+                if self.ability.name == 'Banner' and G.GAME.current_round.discards_left >= 1 then
+                    return {
+                        message = localize{type='variable',key='a_chips',vars={(G.GAME.unused_discards + G.GAME.current_round.discards_left)*self.ability.extra}},
+                        colour = G.C.CHIPS,
+                        card = self
+                    }
+                end
+                if self.ability.name == 'Hiker' and G.GAME.current_round.hands_left >= 1 then
+                    self.ability.extra.chips = self.ability.extra.chips + (self.ability.extra.chip_mod*G.GAME.current_round.hands_left)
+                    return {
+                        message = localize('k_upgrade_ex'),
+                        colour = G.C.CHIPS,
+                        card = self
+                    }
+                end
                 if self.ability.name == 'Campfire' and G.GAME.blind.boss and self.ability.x_mult > 1 then
                     self.ability.x_mult = 1
                     return {
@@ -629,6 +730,7 @@ function Card:calculate_joker(context)
                             end
                         })) 
                         return {
+                            card = self,
                             message = localize('k_eaten_ex'),
                             colour = G.C.FILTER
                         }
@@ -640,6 +742,11 @@ function Card:calculate_joker(context)
                             colour = G.C.FILTER
                         }
                     end
+                end
+                if self.ability.name == 'Troubadour' and self.ability.extra.t_h_size >= 1 then
+                    G.hand:change_size(-self.ability.extra.t_h_size)
+                    self.ability.extra.t_h_size = 0
+                    card_eval_status_text(self, 'jokers', nil, nil, nil, {message = localize('k_reset')})
                 end
                 if self.ability.name == 'Invisible Joker' and not context.blueprint then
                     self.ability.invis_rounds = self.ability.invis_rounds + 1
@@ -718,7 +825,7 @@ function Card:calculate_joker(context)
                         colour = G.C.MONEY
                     }
                 end
-                if self.ability.name == 'Hit the Road' and self.ability.x_mult > 1 then
+                if self.ability.name == 'Hit the Road' and self.ability.x_mult < 1 then
                     self.ability.x_mult = 1
                     return {
                         message = localize('k_reset'),
@@ -774,15 +881,6 @@ function Card:calculate_joker(context)
             end
         elseif context.individual then
             if context.cardarea == G.play then
-                if self.ability.name == 'Hiker' then
-                        context.other_card.ability.perma_bonus = context.other_card.ability.perma_bonus or 0
-                        context.other_card.ability.perma_bonus = context.other_card.ability.perma_bonus + self.ability.extra
-                        return {
-                            extra = {message = localize('k_upgrade_ex'), colour = G.C.CHIPS},
-                            colour = G.C.CHIPS,
-                            card = self
-                        }
-                end
                 if self.ability.name == 'Lucky Cat' and context.other_card.lucky_trigger and not context.blueprint then
                     self.ability.x_mult = self.ability.x_mult + self.ability.extra
                     return {
@@ -813,27 +911,6 @@ function Card:calculate_joker(context)
                         }
                     end
                 end
-                if self.ability.name == '8 Ball' and #G.consumeables.cards + G.GAME.consumeable_buffer < G.consumeables.config.card_limit then
-                    if (context.other_card:get_id() == 8) and (pseudorandom('8ball') < G.GAME.probabilities.normal/self.ability.extra) then
-                        G.GAME.consumeable_buffer = G.GAME.consumeable_buffer + 1
-                        return {
-                            extra = {focus = self, message = localize('k_plus_tarot'), func = function()
-                                G.E_MANAGER:add_event(Event({
-                                    trigger = 'before',
-                                    delay = 0.0,
-                                    func = (function()
-                                            local card = create_card('Tarot',G.consumeables, nil, nil, nil, nil, nil, '8ba')
-                                            card:add_to_deck()
-                                            G.consumeables:emplace(card)
-                                            G.GAME.consumeable_buffer = 0
-                                        return true
-                                    end)}))
-                            end},
-                            colour = G.C.SECONDARY_SET.Tarot,
-                            card = self
-                        }
-                    end
-                end
                 if self.ability.name == 'The Idol' and
                     context.other_card:get_id() == G.GAME.current_round.idol_card.id and 
                     context.other_card:is_suit(G.GAME.current_round.idol_card.suit) then
@@ -860,7 +937,11 @@ function Card:calculate_joker(context)
                 if self.ability.name == 'Golden Ticket' and
                     context.other_card.ability.name == 'Gold Card' then
                         G.GAME.dollar_buffer = (G.GAME.dollar_buffer or 0) + self.ability.extra
-                        G.E_MANAGER:add_event(Event({func = (function() G.GAME.dollar_buffer = 0; return true end)}))
+                        if G.SETTINGS.reduce_animation then
+                            G.GAME.dollar_buffer = 0
+                        else
+                            G.E_MANAGER:add_event(Event({func = (function() G.GAME.dollar_buffer = 0; return true end)}))
+                        end
                         return {
                             dollars = self.ability.extra,
                             card = self
@@ -886,7 +967,11 @@ function Card:calculate_joker(context)
                     context.other_card:is_face() and
                     pseudorandom('business') < G.GAME.probabilities.normal/self.ability.extra then
                         G.GAME.dollar_buffer = (G.GAME.dollar_buffer or 0) + 2
-                        G.E_MANAGER:add_event(Event({func = (function() G.GAME.dollar_buffer = 0; return true end)}))
+                        if G.SETTINGS.reduce_animation then
+                            G.GAME.dollar_buffer = 0
+                        else
+                            G.E_MANAGER:add_event(Event({func = (function() G.GAME.dollar_buffer = 0; return true end)}))
+                        end
                         return {
                             dollars = 2,
                             card = self
@@ -934,7 +1019,11 @@ function Card:calculate_joker(context)
                 if self.ability.name == 'Rough Gem' and
                 context.other_card:is_suit("Diamonds") then
                     G.GAME.dollar_buffer = (G.GAME.dollar_buffer or 0) + self.ability.extra
-                    G.E_MANAGER:add_event(Event({func = (function() G.GAME.dollar_buffer = 0; return true end)}))
+                    if G.SETTINGS.reduce_animation then
+                        G.GAME.dollar_buffer = 0
+                    else
+                        G.E_MANAGER:add_event(Event({func = (function() G.GAME.dollar_buffer = 0; return true end)}))
+                    end
                     return {
                         dollars = self.ability.extra,
                         card = self
@@ -1020,7 +1109,11 @@ function Card:calculate_joker(context)
                             }
                         else
                             G.GAME.dollar_buffer = (G.GAME.dollar_buffer or 0) + self.ability.extra.dollars
-                            G.E_MANAGER:add_event(Event({func = (function() G.GAME.dollar_buffer = 0; return true end)}))
+                            if G.SETTINGS.reduce_animation then
+                                G.GAME.dollar_buffer = 0
+                            else
+                                G.E_MANAGER:add_event(Event({func = (function() G.GAME.dollar_buffer = 0; return true end)}))
+                            end
                             return {
                                 dollars = self.ability.extra.dollars,
                                 card = self
@@ -1201,36 +1294,16 @@ function Card:calculate_joker(context)
                     if self.ability.name == 'To Do List' and context.scoring_name == self.ability.to_do_poker_hand then
                         ease_dollars(self.ability.extra.dollars)
                         G.GAME.dollar_buffer = (G.GAME.dollar_buffer or 0) + self.ability.extra.dollars
-                        G.E_MANAGER:add_event(Event({func = (function() G.GAME.dollar_buffer = 0; return true end)}))
+                        if G.SETTINGS.reduce_animation then
+                            G.GAME.dollar_buffer = 0
+                        else
+                            G.E_MANAGER:add_event(Event({func = (function() G.GAME.dollar_buffer = 0; return true end)}))
+                        end
                         return {
                             message = localize('$')..self.ability.extra.dollars,
                             dollars = self.ability.extra.dollars,
                             colour = G.C.MONEY
                         }
-                    end
-                    if self.ability.name == 'DNA' and G.GAME.current_round.hands_played == 0 then
-                        if #context.full_hand == 1 then
-                            G.playing_card = (G.playing_card and G.playing_card + 1) or 1
-                            local _card = copy_card(context.full_hand[1], nil, nil, G.playing_card)
-                            _card:add_to_deck()
-                            G.deck.config.card_limit = G.deck.config.card_limit + 1
-                            table.insert(G.playing_cards, _card)
-                            G.hand:emplace(_card)
-                            _card.states.visible = nil
-
-                            G.E_MANAGER:add_event(Event({
-                                func = function()
-                                    _card:start_materialize()
-                                    return true
-                                end
-                            })) 
-                            return {
-                                message = localize('k_copied_ex'),
-                                colour = G.C.CHIPS,
-                                card = self,
-                                playing_cards_created = {true}
-                            }
-                        end
                     end
                     if self.ability.name == 'Ride the Bus' and not context.blueprint then
                         local faces = false
@@ -1248,27 +1321,20 @@ function Card:calculate_joker(context)
                             end
                         else
                             self.ability.mult = self.ability.mult + self.ability.extra
+                            return {
+                                message = localize('k_upgrade_ex'),
+                                colour = G.C.RED,
+                                card = self
+                            }
                         end
                     end
                     if self.ability.name == 'Obelisk' and not context.blueprint then
-                        local reset = true
-                        local play_more_than = (G.GAME.hands[context.scoring_name].played or 0)
-                        for k, v in pairs(G.GAME.hands) do
-                            if k ~= context.scoring_name and v.played >= play_more_than and v.visible then
-                                reset = false
-                            end
-                        end
-                        if reset then
-                            if self.ability.x_mult > 1 then
-                                self.ability.x_mult = 1
-                                return {
-                                    card = self,
-                                    message = localize('k_reset')
-                                }
-                            end
-                        else
-                            self.ability.x_mult = self.ability.x_mult + self.ability.extra
-                        end
+                        self.ability.x_mult = self.ability.x_mult + self.ability.extra
+                        return {
+                            card = self,
+                            message = localize{type='variable', key='a_xmult', vars={self.ability.x_mult}},
+                            colour = G.C.RED
+                        }
                     end
                     if self.ability.name == 'Green Joker' and not context.blueprint then
                         self.ability.mult = self.ability.mult + self.ability.extra.hand_add
@@ -1338,6 +1404,12 @@ function Card:calculate_joker(context)
                             }
                         end
                     end
+                    if self.ability.name == 'Troubadour' and not context.blueprint then
+                        G.hand:change_size(self.ability.extra.h_size)
+                        self.ability.extra.t_h_size = self.ability.extra.t_h_size + self.ability.extra.h_size
+                        card_eval_status_text(self, 'jokers', nil, nil, nil, {message = localize('k_reward')})
+                    end
+                    
                 else
                         if self.ability.name == 'Loyalty Card' then
                             self.ability.loyalty_remaining = (self.ability.extra.every-1-(G.GAME.hands_played - self.ability.hands_played_at_create))%(self.ability.extra.every+1)
@@ -1414,10 +1486,11 @@ function Card:calculate_joker(context)
                                 mult_mod = temp_Mult
                             }
                         end
-                        if self.ability.name == 'Banner' and G.GAME.current_round.discards_left > 0 then
+                        if self.ability.name == 'Banner' and G.GAME.unused_discards > 0 then
                             return {
-                                message = localize{type='variable',key='a_chips',vars={G.GAME.current_round.discards_left*self.ability.extra}},
-                                chip_mod = G.GAME.current_round.discards_left*self.ability.extra
+                                message = localize{type='variable',key='a_chips',vars={G.GAME.unused_discards*self.ability.extra}},
+                                chip_mod = G.GAME.unused_discards*self.ability.extra,
+                                colour = G.C.CHIPS
                             }
                         end
                         if self.ability.name == 'Stuntman' then
@@ -1430,7 +1503,11 @@ function Card:calculate_joker(context)
                             if G.GAME.blind.triggered then 
                                 ease_dollars(self.ability.extra)
                                 G.GAME.dollar_buffer = (G.GAME.dollar_buffer or 0) + self.ability.extra
-                                G.E_MANAGER:add_event(Event({func = (function() G.GAME.dollar_buffer = 0; return true end)}))
+                                if G.SETTINGS.reduce_animation then
+                                    G.GAME.dollar_buffer = 0
+                                else
+                                    G.E_MANAGER:add_event(Event({func = (function() G.GAME.dollar_buffer = 0; return true end)}))
+                                end
                                 return {
                                     message = localize('$')..self.ability.extra,
                                     dollars = self.ability.extra,
@@ -1449,6 +1526,20 @@ function Card:calculate_joker(context)
                                 message = localize{type='variable',key='a_mult',vars={self.ability.mult}},
                                 mult_mod = self.ability.mult
                             }
+                        end
+                        if self.ability.name == 'DNA' and G.GAME.current_round.hands_played == 0 then
+                            if #context.full_hand == 1 then
+                                G.E_MANAGER:add_event(Event({trigger = 'before', delay = 0.0, func = (function()
+                                    local card = create_card('Spectral', G.consumeables, nil, nil, nil, nil, 'c_cryptid', 'dna')
+                                    card:set_edition({negative = true}, true, true)
+                                    card:add_to_deck()
+                                    G.consumeables:emplace(card)
+                                return true end)}))
+                                return {
+                                    message = localize('k_copied_ex'),
+                                    card = self
+                                }
+                            end
                         end
                         if self.ability.name == 'Vagabond' and #G.consumeables.cards + G.GAME.consumeable_buffer < G.consumeables.config.card_limit then
                             if G.GAME.dollars <= self.ability.extra then
@@ -1469,12 +1560,36 @@ function Card:calculate_joker(context)
                                 }
                             end
                         end
+                        if self.ability.name == '8 Ball' and #G.consumeables.cards + G.GAME.consumeable_buffer < G.consumeables.config.card_limit then
+                            local cards_8 = 0
+                            for k, v in ipairs(context.scoring_hand) do
+                                if v:get_id() == 8 and not v.debuff then cards_8 = cards_8 + 1 end
+                            end
+                            if cards_8 >= self.ability.extra then
+                                G.GAME.consumeable_buffer = G.GAME.consumeable_buffer + 1
+                                G.E_MANAGER:add_event(Event({
+                                    trigger = 'before',
+                                    delay = 0.0,
+                                    func = (function()
+                                            local card = create_card('Tarot', G.consumeables, nil, nil, nil, nil, nil, '8ba')
+                                            card:add_to_deck()
+                                            G.consumeables:emplace(card)
+                                            G.GAME.consumeable_buffer = 0
+                                        return true
+                                    end)}))
+                                return {
+                                    message = localize('k_plus_tarot'),
+                                    colour = G.C.SECONDARY_SET.Tarot,
+                                    card = self
+                                }
+                            end
+                        end
                         if self.ability.name == 'Superposition' and #G.consumeables.cards + G.GAME.consumeable_buffer < G.consumeables.config.card_limit then
                             local aces = 0
                             for i = 1, #context.scoring_hand do
                                 if context.scoring_hand[i]:get_id() == 14 then aces = aces + 1 end
                             end
-                            if aces >= 1 and next(context.poker_hands["Straight"]) then
+                            if aces <= 0 and next(context.poker_hands["Straight"]) then
                                 local card_type = 'Tarot'
                                 G.GAME.consumeable_buffer = G.GAME.consumeable_buffer + 1
                                 G.E_MANAGER:add_event(Event({
@@ -1494,26 +1609,6 @@ function Card:calculate_joker(context)
                                 }
                             end
                         end
-                        if self.ability.name == 'Seance' and #G.consumeables.cards + G.GAME.consumeable_buffer < G.consumeables.config.card_limit then
-                            if next(context.poker_hands[self.ability.extra.poker_hand]) then
-                                G.GAME.consumeable_buffer = G.GAME.consumeable_buffer + 1
-                                G.E_MANAGER:add_event(Event({
-                                    trigger = 'before',
-                                    delay = 0.0,
-                                    func = (function()
-                                            local card = create_card('Spectral',G.consumeables, nil, nil, nil, nil, nil, 'sea')
-                                            card:add_to_deck()
-                                            G.consumeables:emplace(card)
-                                            G.GAME.consumeable_buffer = 0
-                                        return true
-                                    end)}))
-                                return {
-                                    message = localize('k_plus_spectral'),
-                                    colour = G.C.SECONDARY_SET.Spectral,
-                                    card = self
-                                }
-                            end
-                        end
                         if self.ability.name == 'Flower Pot' then
                             local suits = {
                                 ['Hearts'] = 0,
@@ -1523,18 +1618,18 @@ function Card:calculate_joker(context)
                             }
                             for i = 1, #context.scoring_hand do
                                 if context.scoring_hand[i].ability.name ~= 'Wild Card' then
-                                    if context.scoring_hand[i]:is_suit('Hearts', true) and suits["Hearts"] == 0 then suits["Hearts"] = suits["Hearts"] + 1
-                                    elseif context.scoring_hand[i]:is_suit('Diamonds', true) and suits["Diamonds"] == 0  then suits["Diamonds"] = suits["Diamonds"] + 1
-                                    elseif context.scoring_hand[i]:is_suit('Spades', true) and suits["Spades"] == 0  then suits["Spades"] = suits["Spades"] + 1
-                                    elseif context.scoring_hand[i]:is_suit('Clubs', true) and suits["Clubs"] == 0  then suits["Clubs"] = suits["Clubs"] + 1 end
+                                    if context.scoring_hand[i]:is_suit('Hearts', true) and suits["Hearts"] == 0 then suits["Hearts"] = suits["Hearts"] + 1 end
+                                    if context.scoring_hand[i]:is_suit('Diamonds', true) and suits["Diamonds"] == 0  then suits["Diamonds"] = suits["Diamonds"] + 1 end
+                                    if context.scoring_hand[i]:is_suit('Spades', true) and suits["Spades"] == 0  then suits["Spades"] = suits["Spades"] + 1 end
+                                    if context.scoring_hand[i]:is_suit('Clubs', true) and suits["Clubs"] == 0  then suits["Clubs"] = suits["Clubs"] + 1 end
                                 end
                             end
                             for i = 1, #context.scoring_hand do
                                 if context.scoring_hand[i].ability.name == 'Wild Card' then
-                                    if context.scoring_hand[i]:is_suit('Hearts') and suits["Hearts"] == 0 then suits["Hearts"] = suits["Hearts"] + 1
-                                    elseif context.scoring_hand[i]:is_suit('Diamonds') and suits["Diamonds"] == 0  then suits["Diamonds"] = suits["Diamonds"] + 1
-                                    elseif context.scoring_hand[i]:is_suit('Spades') and suits["Spades"] == 0  then suits["Spades"] = suits["Spades"] + 1
-                                    elseif context.scoring_hand[i]:is_suit('Clubs') and suits["Clubs"] == 0  then suits["Clubs"] = suits["Clubs"] + 1 end
+                                    if context.scoring_hand[i]:is_suit('Hearts') and suits["Hearts"] == 0 then suits["Hearts"] = suits["Hearts"] + 1 end
+                                    if context.scoring_hand[i]:is_suit('Diamonds') and suits["Diamonds"] == 0  then suits["Diamonds"] = suits["Diamonds"] + 1 end
+                                    if context.scoring_hand[i]:is_suit('Spades') and suits["Spades"] == 0  then suits["Spades"] = suits["Spades"] + 1 end
+                                    if context.scoring_hand[i]:is_suit('Clubs') and suits["Clubs"] == 0  then suits["Clubs"] = suits["Clubs"] + 1 end
                                 end
                             end
                             if suits["Hearts"] > 0 and
@@ -1564,10 +1659,10 @@ function Card:calculate_joker(context)
                             end
                             for i = 1, #context.scoring_hand do
                                 if context.scoring_hand[i].ability.name == 'Wild Card' then
-                                    if context.scoring_hand[i]:is_suit('Clubs') and suits["Clubs"] == 0 then suits["Clubs"] = suits["Clubs"] + 1
-                                    elseif context.scoring_hand[i]:is_suit('Diamonds') and suits["Diamonds"] == 0  then suits["Diamonds"] = suits["Diamonds"] + 1
-                                    elseif context.scoring_hand[i]:is_suit('Spades') and suits["Spades"] == 0  then suits["Spades"] = suits["Spades"] + 1
-                                    elseif context.scoring_hand[i]:is_suit('Hearts') and suits["Hearts"] == 0  then suits["Hearts"] = suits["Hearts"] + 1 end
+                                    if context.scoring_hand[i]:is_suit('Clubs') and suits["Clubs"] == 0 then suits["Clubs"] = suits["Clubs"] + 1 end
+                                    if context.scoring_hand[i]:is_suit('Diamonds') and suits["Diamonds"] == 0  then suits["Diamonds"] = suits["Diamonds"] + 1 end
+                                    if context.scoring_hand[i]:is_suit('Spades') and suits["Spades"] == 0  then suits["Spades"] = suits["Spades"] + 1 end
+                                    if context.scoring_hand[i]:is_suit('Hearts') and suits["Hearts"] == 0  then suits["Hearts"] = suits["Hearts"] + 1 end
                                 end
                             end
                             if (suits["Hearts"] > 0 or
@@ -1623,6 +1718,13 @@ function Card:calculate_joker(context)
                             }
                         end
                         if self.ability.name == 'Ice Cream' then
+                            return {
+                                message = localize{type='variable',key='a_chips',vars={self.ability.extra.chips}},
+                                chip_mod = self.ability.extra.chips, 
+                                colour = G.C.CHIPS
+                            }
+                        end
+                        if self.ability.name == 'Hiker' then
                             return {
                                 message = localize{type='variable',key='a_chips',vars={self.ability.extra.chips}},
                                 chip_mod = self.ability.extra.chips, 
