@@ -113,6 +113,12 @@ function Tag:set_ability()
 end
 
 function Tag:apply_to_run(_context)
+    for k, v in pairs(Incompatible_Tags) do
+        if self.key == k then
+            self.ability.incompatible = true
+        end
+    end
+    if not self.ability.click_check and not self.ability.incompatible and G.SETTINGS.manually_trigger_tags then return end
     if not self.triggered and self.config.type == _context.type then
         if _context.type == 'eval' then 
             if self.name == 'Investment Tag' and
@@ -238,7 +244,7 @@ function Tag:apply_to_run(_context)
             end
             if self.name == 'Ethereal Tag' then
                 self:yep('+', G.C.SECONDARY_SET.Spectral,function() 
-                    local key = 'p_spectral_normal_1'
+                    local key = 'p_spectral_mega_1'
                     local card = Card(G.play.T.x + G.play.T.w/2 - G.CARD_W*1.27/2,
                     G.play.T.y + G.play.T.h/2-G.CARD_H*1.27/2, G.CARD_W*1.27, G.CARD_H*1.27, G.P_CARDS.empty, G.P_CENTERS[key], {bypass_discovery_center = true, bypass_discovery_ui = true})
                     card.cost = 0
@@ -508,6 +514,7 @@ function Tag:generate_UI(_size)
     tag_sprite.states.hover.can = true
     tag_sprite.states.drag.can = false
     tag_sprite.states.collide.can = true
+    tag_sprite.states.click.can = true
     tag_sprite.config = {tag = self, force_focus = true}
 
     tag_sprite.hover = function(_self)
@@ -535,6 +542,32 @@ function Tag:generate_UI(_size)
         end
     end
     tag_sprite.stop_hover = function(_self) _self.hovering = false; Node.stop_hover(_self); _self.hover_tilt = 0 end
+    tag_sprite.click = function(_self)
+        if tag_sprite.config.subscribe and G.GAME.dollars - G.GAME.bankrupt_at >= 8 then
+            add_tag(tag_sprite.config.tag)
+            play_sound('generic1', 0.9 + math.random()*0.1, 0.8)
+            play_sound('holo1', 1.2 + math.random()*0.1, 0.4)
+            G.OVERLAY_MENU:get_UIE_by_ID('tag_Boss_container'):remove()
+            G.GAME.round_resets.blind_tags['Boss'] = nil
+            ease_dollars(-8)
+            return
+        end
+        self.ability.click_check = true
+        for k, v in pairs(Incompatible_Tags) do
+            if self.key == k then
+                self.ability.incompatible = true
+            end
+        end
+        if not self.ability.incompatible and self:can_trigger() then
+            self:click_to_run()
+        end
+        if not self.triggered then
+            self:move_to_last()
+            self:juice_up()
+            play_sound('cancel')
+        end
+        self.ability.click_check = nil
+    end
 
     tag_sprite:juice_up()
     self.tag_sprite = tag_sprite
@@ -542,9 +575,130 @@ function Tag:generate_UI(_size)
     return tag_sprite_tab, tag_sprite
 end
 
+Incompatible_Tags = {
+    tag_uncommon=     {config = {type = 'store_joker_create'}},
+    tag_rare=         {config = {type = 'store_joker_create', odds = 3}},
+    tag_investment=   {config = {type = 'eval', dollars = 25}},
+}
+
+function Tag:can_trigger()
+    if not self.HUD_tag then return false end
+    local type = self.config.type
+    if type == 'store_joker_create' then
+        return false
+    elseif type == 'store_joker_modify' then
+        if G.STATE == G.STATES.SHOP and G.shop_jokers and #G.shop_jokers.cards >= 1 then
+            return true
+        end
+    elseif type == 'eval' then
+        return false
+    elseif type == 'voucher_add' then
+        if G.STATE == G.STATES.SHOP then
+            return true
+        end
+    elseif type == 'new_blind_choice' then
+        if G.STATE == G.STATES.BLIND_SELECT then
+            return true
+        end
+    elseif type == 'immediate' then
+        return true
+    elseif type == 'shop_final_pass' then
+        if G.STATE == G.STATES.SHOP then
+            return true
+        end
+    elseif type == 'tag_add' then
+        if G.GAME.tags and #G.GAME.tags >= 1 then
+            return true
+        end
+    elseif type == 'round_start_bonus' then
+        if G.STATE == G.STATES.SELECTING_HAND then
+            return true
+        end
+    elseif type == 'shop_start' then
+        if G.STATE == G.STATES.SHOP then
+            return true
+        end
+    end
+    return false
+end
+
+function Tag:click_to_run()
+    if self.config.type == 'store_joker_modify' then
+        local _card = G.shop_jokers.cards[1]
+        for i = 1, #G.shop_jokers.cards do
+            if not G.shop_jokers.cards[i].edition and not G.shop_jokers.cards[i].temp_edition and G.shop_jokers.cards[i].ability.set == 'Joker' then
+                _card = G.shop_jokers.cards[i]
+                break
+            end
+        end
+        self:apply_to_run({type = 'store_joker_modify', card = _card})
+    elseif self.config.type == 'voucher_add' then
+        self:apply_to_run({type = 'voucher_add'})
+    elseif self.config.type == 'new_blind_choice' then
+        self:apply_to_run({type = 'new_blind_choice'})
+    elseif self.config.type == 'immediate' then
+        self:apply_to_run({type = 'immediate'})
+    elseif self.config.type == 'shop_final_pass' then
+        self:apply_to_run({type = 'shop_final_pass'})
+    elseif self.config.type == 'tag_add' then
+        local _tag = self
+        for i = 1, #G.GAME.tags do
+            if G.GAME.tags[i] == self then
+                for j = i + 1, #G.GAME.tags do
+                    if G.GAME.tags[j].key ~= self.key then
+                        _tag = G.GAME.tags[j]
+                        break
+                    end
+                end
+                break
+            end
+        end
+        self:apply_to_run({type = 'tag_add', tag = _tag})
+    elseif self.config.type == 'round_start_bonus' then
+        self:apply_to_run({type = 'round_start_bonus'})
+    elseif self.config.type == 'shop_start' then
+        self:apply_to_run({type = 'shop_start'})
+    end
+end
+
+function Tag:move_to_last()
+    if not G.HUD_tags or not G.GAME.tags then return end
+    local hud_key, game_key
+    for k, v in ipairs(G.HUD_tags) do
+        if v == self.HUD_tag then hud_key = k break end
+    end
+    for k, v in ipairs(G.GAME.tags) do
+        if v == self then game_key = k break end
+    end
+    if not hud_key or not game_key or hud_key == #G.HUD_tags then return end
+    local current_hud_tag = table.remove(G.HUD_tags, hud_key)
+    table.insert(G.HUD_tags, current_hud_tag)
+    local current_game_tag = table.remove(G.GAME.tags, game_key)
+    table.insert(G.GAME.tags, current_game_tag)
+    if hud_key == 1 then
+        G.HUD_tags[1]:set_alignment({
+            type = 'bri',
+            offset = {x=0.7, y=0},
+            xy_bond = 'Weak',
+            major = G.ROOM_ATTACH
+        })
+    else
+        G.HUD_tags[hud_key]:set_role({
+            xy_bond = 'Weak',
+            major = G.HUD_tags[hud_key - 1]
+        })
+    end
+    self.HUD_tag:set_alignment({
+        type = 'tm',
+        offset = {x=0, y=0},
+        xy_bond = 'Weak',
+        major = G.HUD_tags[#G.HUD_tags - 1]
+    })
+end
+
 function Tag:get_uibox_table(tag_sprite)
     tag_sprite = tag_sprite or self.tag_sprite
-    local name_to_check, loc_vars = self.name, {}
+    local name_to_check, loc_vars, main_end = self.name, {}, nil
     if name_to_check == 'Uncommon Tag' then
     elseif name_to_check == 'Investment Tag' then loc_vars = {self.config.dollars}
     elseif name_to_check == 'Handy Tag' then loc_vars = {self.config.dollars_per_hand, self.config.dollars_per_hand*(G.GAME.hands_played or 0)}
@@ -556,7 +710,15 @@ function Tag:get_uibox_table(tag_sprite)
         (self.ability.orbital_hand == '['..localize('k_poker_hand')..']') and self.ability.orbital_hand or localize(self.ability.orbital_hand, 'poker_hands'), self.config.levels}
     elseif name_to_check == 'Economy Tag' then loc_vars = {self.config.max}
     end
-    tag_sprite.ability_UIBox_table = generate_card_ui(G.P_TAGS[self.key], nil, loc_vars, (self.hide_ability) and 'Undiscovered' or 'Tag', nil, (self.hide_ability))
+    if self.tag_sprite.config.subscribe then
+        main_end = {{n=G.UIT.C, config={align = "m", r = 0.05, padding = 0.03, res = 0.15}, nodes={
+            {n=G.UIT.R, config={align = "cm"}, nodes={
+                {n=G.UIT.T, config={text = localize("ph_alert_debuff_confirm").." ", colour = G.C.PALE_GREEN, scale = 0.32*G.LANG.font.DESCSCALE*1.45*1.1}},
+                {n=G.UIT.T, config={text = localize("$")..8, lang = G.LANGUAGES['en-us'], colour = G.C.PALE_GREEN, scale = 0.32*G.LANG.font.DESCSCALE*1.45*1.1}},
+            }}
+        }}}
+    end
+    tag_sprite.ability_UIBox_table = generate_card_ui(G.P_TAGS[self.key], nil, loc_vars, (self.hide_ability) and 'Undiscovered' or 'Tag', nil, (self.hide_ability), nil, main_end)
     return tag_sprite
 end
 
