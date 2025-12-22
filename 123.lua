@@ -404,7 +404,9 @@ G.FUNCS.discard_cards_from_highlighted = function(e, hook)
                 eval = G.jokers.cards[j]:calculate_joker({discard = true, other_card =  G.hand.highlighted[i], full_hand = G.hand.highlighted})
                 if eval then
                     if eval.remove then removed = true end
-                    card_eval_status_text(G.jokers.cards[j], 'jokers', nil, 1, nil, eval)
+                    if not eval.no_message then
+                        card_eval_status_text(G.jokers.cards[j], 'jokers', nil, 1, nil, eval)
+                    end
                 end
             end
             table.insert(cards, G.hand.highlighted[i])
@@ -1030,10 +1032,12 @@ G.FUNCS.evaluate_play = function(e)
         trigger = 'after',delay = 0.4,
         func = (function()  update_hand_text({delay = 0, immediate = true}, {mult = 0, chips = 0, chip_total = math.floor(hand_chips*mult), level = '', handname = ''});play_sound('button', 0.9, 0.6);return true end)
       }))
+      record_history_hands({handname = text, disp_handname = non_loc_disp_text, chips = hand_chips, mult = mult, scoring_hand = scoring_hand})
+      
       check_and_set_high_score('hand', hand_chips*mult)
 
       check_for_unlock({type = 'chip_score', chips = math.floor(hand_chips*mult)})
-   
+    
     if hand_chips*mult > 0 then 
         delay(0.8)
         G.E_MANAGER:add_event(Event({
@@ -1133,6 +1137,7 @@ G.FUNCS.evaluate_play = function(e)
 end
 
 G.FUNCS.evaluate_round = function()
+    G.GAME.total_cashout_rows = 0
     local pitch = 0.95
     local dollars = 0
 
@@ -1203,6 +1208,21 @@ G.FUNCS.evaluate_round = function()
     end
 
     pitch = pitch + 0.06
+
+    if G.GAME.total_cashout_rows > 7 then
+        local total_hidden = G.GAME.total_cashout_rows - 7
+        G.E_MANAGER:add_event(Event({trigger = 'before', delay = 0.38, func = function()
+            local hidden = {n=G.UIT.R, config={align = "cm"}, nodes={
+                {n=G.UIT.O, config={object = DynaText({
+                    string = {number_format(total_hidden)}, 
+                    colours = {G.C.WHITE}, shadow = true, float = false, 
+                    scale = 0.45,
+                    font = G.LANGUAGES['en-us'].font, pop_in = 0
+                })}}
+            }}
+            G.round_eval:add_child(hidden, G.round_eval:get_UIE_by_ID('bonus_round_eval'))
+        return true end}))
+    end
 
     add_round_eval_row({name = 'bottom', dollars = dollars})
 end
