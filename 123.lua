@@ -10,6 +10,7 @@ self.focused = {target = nil, handled = true, prev_target = nil } --The node tha
 self.dragging = {target = nil, handled = true, prev_target = nil} --The node being dragged this frame
 self.hovering = {target = nil, handled = true, prev_target = nil} --The node being hovered this frame
 self.released_on = {target = nil, handled = true, prev_target = nil} --The node that the cursor 'Released' on, like letting go of LMB
+self.slide = {target = nil, handled = true, continued = false, started = false}
 
 self.collision_list = {} --A list of all node that the cursor currently collides with
 
@@ -324,6 +325,8 @@ function Controller:update(dt)
             self.cursor_down.target:set_offset(self.cursor_down.T, 'Click')
             self.dragging.target = self.cursor_down.target
             self.dragging.handled = false
+        else
+            self.slide.handled = false
         end
         self.cursor_down.handled = true
     end
@@ -335,6 +338,9 @@ function Controller:update(dt)
             self.dragging.target.states.drag.is = false
             self.dragging.target = nil
         end
+        self.slide.target = nil
+        self.slide.started = false
+        self.slide.continued = false
         --Now, handle the Cursor release
         --Was the Cursor release in the same location as the Cursor press and within Cursor timeout?
         if self.cursor_down.target then 
@@ -351,7 +357,40 @@ function Controller:update(dt)
                 end
             end
         end
+        if self.cursor_down.target and self.dragging.prev_target then
+            local releasable = nil
+            for _, v in ipairs(self.collision_list) do
+                if v.states.hover.can and (not v.states.drag.is) and (v ~= self.dragging.prev_target) then
+                    releasable = v
+                    break 
+                end
+            end
+            if releasable and releasable.states.release_on.can then 
+                self.released_on.target = releasable
+                self.released_on.handled = false
+            end
+        end
         self.cursor_up.handled = true
+    end
+
+    if not self.slide.handled then
+        self.slide.continued = true
+        self.slide.started = true
+        self.slide.handled = true
+        if self.hovering.target then self.hovering.target = nil end
+    end
+    
+    if self.slide.continued then
+        if self.hovering.target and self.hovering.target:is(Card) and self.hovering.target.area and self.hovering.target.area == G.hand then
+            if self.slide.started then
+                self.hovering.target:click()
+                self.slide.target = self.hovering.target
+                self.slide.started = false
+            elseif self.hovering.target ~= self.slide.target then
+                self.hovering.target:click()
+                self.slide.target = self.hovering.target
+            end
+        end
     end
 
     --Cursor is currently hovering over something
@@ -362,7 +401,9 @@ function Controller:update(dt)
         self.hovering.target:set_offset(self.cursor_hover.T, 'Hover')
     elseif (self.cursor_hover.target == nil or (self.HID.touch and not self.is_cursor_down)) and self.hovering.target then
         self.hovering.target.states.hover.is = false
-        self.hovering.target = nil
+        if (self.HID.touch and not self.is_cursor_down) then else
+            self.hovering.target = nil
+        end
     end
 
     --------------------------------------------------------------------
@@ -378,12 +419,21 @@ function Controller:update(dt)
     self:process_registry()
 
     --The object being dragged
+    if self.is_cursor_down then 
+        self.cursor_down.distance = math.max(Vector_Dist(self.cursor_down.T, self.cursor_hover.T), self.cursor_down.distance or 0)
+    else
+        self.cursor_down.distance = nil
+    end
+    if not self.dragging.handled and self.cursor_down.distance and (self.cursor_down.distance > 0.2) and (G.SETTINGS.GRAPHICS.operation_mode or 1) >= 2 then
+        create_drag_target_from_card(self.dragging.target)
+        self.dragging.handled = true
+    end
     if self.dragging.target then
         self.dragging.target:drag()
     end
 
     --The object released on
-    if not self.released_on.handled and self.dragging.prev_target then
+    if not self.released_on.handled and self.released_on.target and self.dragging.prev_target then
         if self.dragging.prev_target == self.hovering.target then self.hovering.target:stop_hover();self.hovering.target = nil end
         self.released_on.target:release(self.dragging.prev_target)
         self.released_on.handled = true
@@ -1368,7 +1418,10 @@ function Controller:capture_focused_input(button, input_type, dt)
             end
         end
     end
-    if ret == true then G.VIBRATION = G.VIBRATION +1 end
+    if ret == true then
+        G.MOBILE_VIBRATION_QUEUE = math.max(G.MOBILE_VIBRATION_QUEUE or 0, 1)
+        G.VIBRATION = G.VIBRATION +1
+    end
     return ret
 end
 
