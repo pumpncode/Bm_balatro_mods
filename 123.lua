@@ -34,6 +34,14 @@ end
 ---@param e {}
 --**e** Is the UIE that called this function
 G.FUNCS.sort_hand_suit = function(e)
+    if G.SETTINGS.flip_sort then
+        for k, v in ipairs(G.hand.cards) do
+            if v.facing == 'back' then v:flip() end
+        end
+        for k, v in ipairs(G.jokers.cards) do
+            if v.facing == 'back' then v:flip() end
+        end
+    end
     G.hand:sort('suit desc')
     play_sound('paper1')
 end
@@ -43,6 +51,14 @@ end
 ---@param e {}
 --**e** Is the UIE that called this function
 G.FUNCS.sort_hand_value = function(e)
+    if G.SETTINGS.flip_sort then
+        for k, v in ipairs(G.hand.cards) do
+            if v.facing == 'back' then v:flip() end
+        end
+        for k, v in ipairs(G.jokers.cards) do
+            if v.facing == 'back' then v:flip() end
+        end
+    end
     G.hand:sort('desc')
     play_sound('paper1')
 end
@@ -803,7 +819,7 @@ G.FUNCS.change_window_cycle_UI = function()
       swap_node.children[1]:remove()
       swap_node.children[1] = nil
       swap_node.UIBox:add_child(
-        create_option_cycle({w = 4,scale = 0.8, options = G.SETTINGS.WINDOW.DISPLAYS[focused_display].screen_resolutions.strings, opt_callback = 'change_screen_resolution',current_option = res_option or 1}),
+        create_option_cycle({font = G.LANGUAGES['en-us'].font, w = 4,scale = 0.8, options = G.SETTINGS.WINDOW.DISPLAYS[focused_display].screen_resolutions.strings, opt_callback = 'change_screen_resolution',current_option = res_option or 1}),
         swap_node)
     end
   end
@@ -863,6 +879,11 @@ end
 G.FUNCS.change_crt_bloom = function(args)
   G.SETTINGS.GRAPHICS.bloom = args.to_key
   G:save_settings()
+end
+
+G.FUNCS.change_operation_mode = function(args)
+    G.SETTINGS.GRAPHICS.operation_mode = args.to_key
+    G:save_settings()
 end
 
 G.FUNCS.change_collab = function(args)
@@ -1177,7 +1198,7 @@ G.FUNCS.apply_window_changes = function(_initial)
     {fullscreen = G.SETTINGS.WINDOW.screenmode ~= 'Windowed',
     fullscreentype = (G.SETTINGS.WINDOW.screenmode == 'Borderless' and 'desktop') or (G.SETTINGS.WINDOW.screenmode == 'Fullscreen' and 'exclusive') or nil,
     vsync = G.SETTINGS.WINDOW.vsync,
-    resizable = true,
+    resizable = not (love.system.getOS() == 'iOS' or love.system.getOS() == 'Android'),
     display = G.SETTINGS.WINDOW.selected_display,
     highdpi = (love.system.getOS() == 'OS X')
     })
@@ -1258,21 +1279,6 @@ G.FUNCS.RUN_SETUP_check_stake2 = function(e)
       config = {offset = {x=0,y=0}, align = 'cm', parent = e}
     }
     e.config.id = G.viewed_stake
-  end
-end
-
-G.FUNCS.change_viewed_collab = function(args)
-  G.viewed_collab = args.to_val
-end
-
-G.FUNCS.CREDITS_check_collab = function(e)
-  if (G.viewed_collab ~= e.config.id) then 
-    e.config.object:remove() 
-    e.config.object = UIBox{
-      definition =  G.UIDEF.viewed_collab_option(),
-      config = {offset = {x=0,y=0}, align = 'cm', parent = e}
-    }
-    e.config.id = G.viewed_collab
   end
 end
 
@@ -1551,6 +1557,286 @@ G.FUNCS.high_scores = function(e)
   G.FUNCS.overlay_menu{
     definition = create_UIBox_high_scores(),
   }
+end
+
+G.FUNCS.achievement_list = function(e)
+    G.SETTINGS.paused = true
+    G.FUNCS.overlay_menu{
+        definition = G.UIDEF.achievement_list(),
+    }
+end
+
+function G.UIDEF.achievement_list()
+    G.ACHIEVEMENT_PAGE_SIZE = 4
+    local achievement_pages = {}
+    G.achievement_list = {}
+    for k, v in pairs(G.ACHIEVEMENTS) do
+        v.name = k
+        G.achievement_list[#G.achievement_list + 1] = v
+    end
+    table.sort(G.achievement_list, function (a, b) return a.order < b.order end)
+    for i = 1, math.ceil(#G.achievement_list/G.ACHIEVEMENT_PAGE_SIZE) do
+        table.insert(achievement_pages, localize('k_page')..' '..tostring(i)..'/'..tostring(math.ceil(#G.achievement_list/G.ACHIEVEMENT_PAGE_SIZE)))
+    end
+    G.E_MANAGER:add_event(Event({func = (function()
+        G.FUNCS.change_achievement_list_page{cycle_config = {current_option = 1}}
+    return true end)}))
+    local _ac_comp, _ac_tot = 0, #G.achievement_list
+    for k, v in ipairs(G.achievement_list) do
+        if v.earned then _ac_comp = _ac_comp + 1 end
+    end
+    local t = create_UIBox_generic_options({back_func = 'options', back_id = 'achievement_list', contents = {
+        {n=G.UIT.C, config={align = "cm", padding = 0.0}, nodes={
+            {n=G.UIT.R, config={align = "cm", padding = 0.1, minh = 2.8, minw = 3.5}, nodes={
+                {n=G.UIT.O, config={id = 'achievement_list', object = Moveable()}},
+            }},
+            {n=G.UIT.R, config={align = "cm", padding = 0.1}, nodes={
+                create_option_cycle({id = 'achievement_page', scale = 0.9, h = 0.3, w = 3.5, options = achievement_pages, cycle_shoulders = true, opt_callback = 'change_achievement_list_page', current_option = 1, colour = G.C.RED, no_pips = true, focus_args = {snap_to = true}})
+            }},
+            {n=G.UIT.R, config={align = "cm", padding = 0.1}, nodes={
+                {n=G.UIT.T, config={text = localize{type = 'variable', key = 'completed', vars = {_ac_comp, _ac_tot}}, scale = 0.4, colour = G.C.WHITE}},
+            }},
+        }},
+        {n=G.UIT.C, config={align = "cm", minh = 5, minw = 8.2}, nodes={
+            {n=G.UIT.O, config={id = 'achievement_area', object = Moveable()}},
+        }},
+    }})
+    return t
+end
+
+G.FUNCS.change_achievement_list_page = function(args)
+    if not args or not args.cycle_config then return end
+    if G.OVERLAY_MENU then
+        local ac_list = G.OVERLAY_MENU:get_UIE_by_ID('achievement_list')
+        if ac_list then
+            if ac_list.config.object then
+                ac_list.config.object:remove()
+            end
+            ac_list.config.object = UIBox{
+                definition =  G.UIDEF.achievement_list_page(args.cycle_config.current_option-1),
+                config = {offset = {x=0,y=0}, align = 'cm', parent = ac_list}
+            }
+            G.FUNCS.change_achievement_description{config = {id = 'nil'}}
+        end
+    end
+end
+
+function G.UIDEF.achievement_list_page(_page)
+    local snapped = false
+    local achievement_list = {}
+    for k, v in ipairs(G.achievement_list) do
+        if v.order > G.ACHIEVEMENT_PAGE_SIZE*(_page or 0) and v.order <= G.ACHIEVEMENT_PAGE_SIZE*((_page or 0) + 1) then
+            if G.CONTROLLER.focused.target and G.CONTROLLER.focused.target.config.id == 'achievement_page' then snapped = true end
+            local achievement_completed =  v.earned
+            achievement_list[#achievement_list+1] = {n=G.UIT.R, config={align = "cm"}, nodes={
+                {n=G.UIT.C, config={align = 'cl', minw = 0.8}, nodes = {
+                    {n=G.UIT.T, config={text = v.order..'', lang = G.LANGUAGES['en-us'], scale = 0.4, colour = G.C.WHITE}},
+                }},
+                UIBox_button({id = v.name, col = true, label = {localize(v.name, 'achievement_names')}, button = 'change_achievement_description', colour = G.C.RED, minw = 4, scale = 0.4, minh = 0.6, focus_args = {snap_to = not snapped}}),
+                {n=G.UIT.C, config={align = 'cm', padding = 0.05, minw = 0.6}, nodes={
+                    {n=G.UIT.C, config={minh = 0.4, minw = 0.4, emboss = 0.05, r = 0.1, colour = achievement_completed and G.C.GREEN or G.C.BLACK}, nodes={
+                        achievement_completed and {n=G.UIT.O, config={object = Sprite(0,0,0.4,0.4, G.ASSET_ATLAS["icons"], {x=1, y=0})}} or nil
+                    }},
+                }},
+            }}      
+            snapped = true
+        end
+    end
+    return {n=G.UIT.ROOT, config={align = "cm", padding = 0.1, colour = G.C.CLEAR}, nodes=achievement_list}
+end
+
+G.FUNCS.change_achievement_description = function(e)
+    if G.OVERLAY_MENU then
+        local desc_area = G.OVERLAY_MENU:get_UIE_by_ID('achievement_area')
+        if desc_area and desc_area.config.oid ~= e.config.id then
+            if desc_area.config.old_chosen then desc_area.config.old_chosen.config.chosen = nil end
+            e.config.chosen = 'vert'
+            if desc_area.config.object then 
+                desc_area.config.object:remove() 
+            end
+            desc_area.config.object = UIBox{
+                definition =  G.UIDEF.achievement_description(e.config.id),
+                config = {offset = {x=0,y=0}, align = 'cm', parent = desc_area}
+            }
+            desc_area.config.oid = e.config.id 
+            desc_area.config.old_chosen = e
+        end
+    end
+end
+
+function G.UIDEF.achievement_description(name)
+    if not G.ACHIEVEMENTS[name] then return {n=G.UIT.ROOT, config={align = "cm", colour = G.C.BLACK, minh = 4.6, minw = 7.9, r = 0.1}, nodes={{n=G.UIT.T, config={text = localize('k_trophy'), scale = 0.4, colour = G.C.UI.TEXT_LIGHT}}}} end
+    local achievement = get_achievement_information(name)
+    local unlock_size = 0.6
+    local unlocks = CardArea(0,0,2*unlock_size,0.6*G.CARD_H, {card_limit = 5, card_w = unlock_size*G.CARD_W, type = 'title_2', highlight_limit = 0})
+    if achievement.card or achievement.seal then
+        local card = Card(0,0, G.CARD_W*unlock_size, G.CARD_H*unlock_size, G.P_CARDS.empty, G.P_CENTERS[achievement.card or 'c_base'], {bypass_discovery_center = true, bypass_discovery_ui = true, bypass_lock = true})
+        if achievement.seal then card:set_seal(achievement.seal, true) end
+        if achievement.polychrome then card:set_edition({polychrome = true}, nil, true) end
+        unlocks:emplace(card)
+    elseif achievement.deck then
+        local deck = Card(unlocks.T.x, unlocks.T.y, G.CARD_W*unlock_size, G.CARD_H*unlock_size, G.P_CARDS.empty, G.P_CENTERS.c_base)
+        local deck_s = Sprite(0, 0, G.CARD_W*unlock_size, G.CARD_W*unlock_size, G.ASSET_ATLAS["centers"], G.P_CENTERS[achievement.deck].pos)
+        deck.no_ui = true
+        deck.children.center = deck_s
+        deck_s:set_role({major = deck, role_type = 'Glued', draw_major = deck})
+        unlocks:emplace(deck)
+    else
+        local trophy = Card(unlocks.T.x, unlocks.T.y, G.CARD_W*unlock_size, G.CARD_W*unlock_size, G.P_CARDS.empty, G.P_CENTERS.c_base)
+        local trophy_s = Sprite(0, 0, G.CARD_W*unlock_size, G.CARD_W*unlock_size, G.ASSET_ATLAS["icons"], {x=3, y=0})
+        trophy.no_ui = true
+        trophy.children.center = trophy_s
+        trophy_s:set_role({major = trophy, role_type = 'Glued', draw_major = trophy})
+        unlocks:emplace(trophy)
+    end
+    local ac_tab = {max = achievement.tab.max or 1, current = achievement.tab.current or 0}
+    if achievement.completed then ac_tab.current = ac_tab.max end
+    local progress_bars = {n=G.UIT.C, config={align = "cm", r = 0.1, maxh = 1.8, colour = G.C.L_BLACK, emboss = 0.05, progress_bar = {max = ac_tab.max, ref_table = ac_tab, ref_value = 'current', empty_col = G.C.L_BLACK, filled_col = achievement.completed and G.C.GREEN or G.C.FILTER}}, nodes={
+        {n=G.UIT.C, config={align = "cm", padding = 0.05, r = 0.1, minw = 5}, nodes={
+            {n=G.UIT.O, config={object = DynaText({string = {math.floor(0.01+100*ac_tab.current/ac_tab.max)..'%'}, font = G.LANGUAGES['en-us'].font, colours = {G.C.WHITE}, shadow = true, float = true, scale = 0.6})}},
+            {n=G.UIT.T, config={text = " ("..ac_tab.current..'/'..ac_tab.max..")", lang = G.LANGUAGES['en-us'], scale = scale_number(ac_tab.max, 0.5), colour = G.C.JOKER_GREY}}
+        }}
+    }}
+    local unlock_col = {n=G.UIT.C, config={align = "cm", padding = 0.05, colour = G.C.L_BLACK, r = 0.1, maxh = 1.8}, nodes={
+        {n=G.UIT.T, config={text = localize('k_reward'), scale = 0.5, colour = G.C.UI.TEXT_LIGHT, vert = true, shadow = true}},
+        {n=G.UIT.C, config={align = "cm", minh = 0.6*G.CARD_H, minw = 2, r = 0.1, colour = G.C.UI.TRANSPARENT_DARK}, nodes={
+            unlocks and {n=G.UIT.O, config={object = unlocks}} or {n=G.UIT.T, config={text = localize('k_none'), scale = 0.5, colour = G.C.UI.TEXT_LIGHT}}
+        }}
+    }}
+    return {n=G.UIT.ROOT, config={align = "cm", r = 0.1, colour = G.C.BLACK}, nodes={
+        {n=G.UIT.R, config={align = "cm", padding = 0.1}, nodes={
+            unlock_col, progress_bars
+        }},
+        {n=G.UIT.R, config={align = "cm", padding = 0.1}, nodes={
+            {n=G.UIT.C, config={align = "cm", padding = 0.1, colour = G.C.L_BLACK, r = 0.1, minw = 3}, nodes={
+                {n=G.UIT.C, config={align = "cm", minw = 3, r = 0.1, colour = G.C.BLUE}, nodes={
+                    {n=G.UIT.R, config={align = "cm", padding = 0.08, minh = 0.6}, nodes={
+                        {n=G.UIT.T, config={text = localize('b_rules'), scale = 0.4, colour = G.C.UI.TEXT_LIGHT, shadow = true}},
+                    }},
+                    {n=G.UIT.R, config={align = "cm", minh = 1.6, minw = 7.5, maxw = 7.5, padding = 0.05, r = 0.1, colour = G.C.WHITE}, nodes={
+                        {n=G.UIT.T, config={text = localize(name, 'achievement_descriptions'), scale = 0.4, colour = G.C.UI.TEXT_DARK}},
+                    }}
+                }}
+            }}
+        }}
+    }}
+end
+
+function get_achievement_information(name)
+    local achievement = {tab = {}, card = nil, seal = nil, polychrome = nil, stake = nil, deck = nil, completed = nil}
+    if name == 'ante_up' then
+        achievement.tab.max = 4
+        achievement.tab.current = math.min(G.PROFILES[G.SETTINGS.profile].high_scores['furthest_ante'].amt, achievement.tab.max)
+        achievement.card = 'j_ring_master'
+    elseif name == 'ante_upper' then
+        achievement.tab.max = 8
+        achievement.tab.current = math.min(G.PROFILES[G.SETTINGS.profile].high_scores['furthest_ante'].amt, achievement.tab.max)
+        achievement.card = 'j_flower_pot'
+    elseif name == 'heads_up' then
+        achievement.tab.current = math.min(G.PROFILES[G.SETTINGS.profile].career_stats['c_wins'], 1)
+        achievement.card = 'j_blueprint'
+    elseif name == 'low_stakes' then
+        achievement.deck = 'b_zodiac'
+    elseif name == 'mid_stakes' then
+        achievement.deck = 'b_anaglyph'
+    elseif name == 'card_player' then
+        achievement.tab.max = 2500
+        achievement.tab.current = math.min(G.PROFILES[G.SETTINGS.profile].career_stats['c_cards_played'], achievement.tab.max)
+        achievement.card = 'v_nacho_tong'
+    elseif name == 'card_discarder' then
+        achievement.tab.max = 2500
+        achievement.tab.current = math.min(G.PROFILES[G.SETTINGS.profile].career_stats['c_cards_discarded'], achievement.tab.max)
+        achievement.card = 'v_recyclomancy'
+    elseif name == 'nest_egg' then
+        achievement.tab.max = 400
+        achievement.tab.current = math.min(G.PROFILES[G.SETTINGS.profile].career_stats['c_dollars_earned'], achievement.tab.max)
+        achievement.card = 'j_satellite'
+    elseif name == 'flushed' then
+        achievement.card = 'm_wild'
+    elseif name == 'speedrunner' then
+        achievement.card = 'j_merry_andy'
+    elseif name == 'roi' then
+        achievement.card = 'v_seed_money'
+    elseif name == 'shattered' then
+        achievement.card = 'm_glass'
+    elseif name == 'royale' then
+        achievement.card = 'j_baron'
+    elseif name == 'retrograde' then
+        achievement.card = 'c_mercury'
+    elseif name == '_10k' then
+        achievement.tab.max = 10000
+        achievement.tab.current = math.min(G.PROFILES[G.SETTINGS.profile].high_scores['hand'].amt, achievement.tab.max)
+        achievement.card = 'j_oops'
+    elseif name == '_1000k' then
+        achievement.tab.max = 1000000
+        achievement.tab.current = math.min(G.PROFILES[G.SETTINGS.profile].high_scores['hand'].amt, achievement.tab.max)
+        achievement.card = 'j_idol'
+    elseif name == '_100000k' then
+        achievement.tab.max = 100000000
+        achievement.tab.current = math.min(G.PROFILES[G.SETTINGS.profile].high_scores['hand'].amt, achievement.tab.max)
+        achievement.card = 'j_stuntman'
+    elseif name == 'tiny_hands' then
+        achievement.card = 'j_four_fingers'
+    elseif name == 'big_hands' then
+        achievement.card = 'v_grabber'
+    elseif name == 'you_get_what_you_get' then
+        achievement.card = 'j_obelisk'
+    elseif name == 'rule_bender' then
+        achievement.card = 'j_acrobat'
+    elseif name == 'rule_breaker' then
+        achievement.tab.max = #G.CHALLENGES
+        achievement.tab.current = 0
+        for k, v in ipairs(G.CHALLENGES) do
+            if v.id and G.PROFILES[G.SETTINGS.profile].challenge_progress.completed[v.id] then
+                achievement.tab.current = achievement.tab.current + 1
+            end
+        end
+        achievement.deck = 'b_challenge'
+    elseif name == 'legendary' then
+        achievement.card = 'c_soul'
+    elseif name == 'astronomy' then
+        achievement.tab.max = G.DISCOVER_TALLIES.planets.of
+        achievement.tab.current = G.DISCOVER_TALLIES.planets.tally
+        achievement.card = 'j_astronomer'
+    elseif name == 'cartomancy' then
+        achievement.tab.max = G.DISCOVER_TALLIES.tarots.of
+        achievement.tab.current = G.DISCOVER_TALLIES.tarots.tally
+        achievement.card = 'j_cartomancer'
+    elseif name == 'clairvoyance' then
+        achievement.tab.max = G.DISCOVER_TALLIES.spectrals.of
+        achievement.tab.current = G.DISCOVER_TALLIES.spectrals.tally
+        achievement.card = 'c_aura'
+    elseif name == 'extreme_couponer' then
+        achievement.tab.max = G.DISCOVER_TALLIES.vouchers.of
+        achievement.tab.current = G.DISCOVER_TALLIES.vouchers.tally
+        achievement.card = 'v_overstock_norm'
+    elseif name == 'completionist' then
+        achievement.tab.max = G.DISCOVER_TALLIES.total.of
+        achievement.tab.current = G.DISCOVER_TALLIES.total.tally
+        achievement.seal = 'Gold'
+    elseif name == 'completionist_plus' then
+        achievement.tab.max = G.PROGRESS.deck_stakes.of
+        achievement.tab.current = G.PROGRESS.deck_stakes.tally
+        achievement.card = 'j_golden'
+    elseif name == 'completionist_plus_plus' then
+        achievement.tab.max = G.PROGRESS.joker_stickers.of
+        achievement.tab.current = G.PROGRESS.joker_stickers.tally
+        achievement.card = 'c_fool'
+        achievement.polychrome = true
+    else
+        achievement.tab.max = 1
+    end
+    if G.ACHIEVEMENTS[name] and G.ACHIEVEMENTS[name].earned then
+        achievement.completed = true
+    end
+    return achievement
+end
+
+G.FUNCS.quick_load = function(e)
+    G:delete_run()
+    G.SAVED_GAME = get_compressed(G.SETTINGS.profile..'/'..'save.jkr')
+    if G.SAVED_GAME ~= nil then G.SAVED_GAME = STR_UNPACK(G.SAVED_GAME) end
+    G:start_run({savetext = G.SAVED_GAME})
 end
 
 G.FUNCS.customize_deck = function(e)
@@ -1907,9 +2193,9 @@ function scale_number(number, scale, max)
   if not number or type(number) ~= 'number' then return scale end
   if not max then max = 10000 end
   if number >= G.E_SWITCH_POINT then
-    scale = scale*math.floor(math.log(max*10, 10))/math.floor(math.log(1000000*10, 10))
+    scale = scale*math.floor(math.log10(max*10))/math.floor(math.log10(1000000*10))
   elseif number >= max then
-    scale = scale*math.floor(math.log(max*10, 10))/math.floor(math.log(number*10, 10))
+    scale = scale*math.floor(math.log10(max*10))/math.floor(math.log10(number*10))
   end
   return scale
 end
@@ -2019,7 +2305,7 @@ G.FUNCS.flame_handler = function(e)
       local exptime = math.exp(-0.4*G.real_dt)
       
       if G.ARGS.score_intensity.earned_score >= G.ARGS.score_intensity.required_score and G.ARGS.score_intensity.required_score > 0 then
-        _F.intensity = ((G.pack_cards and not G.pack_cards.REMOVED) or (G.TAROT_INTERRUPT)) and 0 or math.max(0., math.log(G.ARGS.score_intensity.earned_score, 5)-2)
+        _F.intensity = ((G.pack_cards and not G.pack_cards.REMOVED) or (G.TAROT_INTERRUPT)) and 0 or math.max(0., math.log(G.ARGS.score_intensity.earned_score)/math.log(5)-2)
       else
         _F.intensity = 0
       end
@@ -2129,9 +2415,38 @@ end
     end
   end
 
+  G.FUNCS.can_buy_pack = function(e)
+    if (e.config.ref_table.cost > G.GAME.dollars - G.GAME.bankrupt_at) and (e.config.ref_table.cost > 0) then 
+      e.config.colour = G.C.UI.BACKGROUND_INACTIVE
+      e.config.button = nil
+    else
+      e.config.colour = G.C.ORANGE
+      e.config.button = 'use_card'
+    end
+  end
+
+  G.FUNCS.can_reroll_celestial = function(e)
+    if not G.pack_cards or (G.GAME.STOP_USE and G.GAME.STOP_USE > 0) or G.GAME.reroll_celestial_press or (G.GAME.reroll_celestial_cost > G.GAME.dollars - G.GAME.bankrupt_at and G.GAME.reroll_celestial_cost > 0) then
+        e.config.colour = G.C.UI.BACKGROUND_INACTIVE
+        e.config.button = nil
+    else
+        e.config.colour = G.C.GREEN
+        e.config.button = 'reroll_celestial'
+    end
+  end
+  
+  G.FUNCS.can_reroll_buffoon = function(e)
+    if not G.pack_cards or (G.GAME.STOP_USE and G.GAME.STOP_USE > 0) or G.GAME.reroll_buffoon_press or (G.GAME.reroll_buffoon_cost > G.GAME.dollars - G.GAME.bankrupt_at and G.GAME.reroll_buffoon_cost > 0) then
+        e.config.colour = G.C.UI.BACKGROUND_INACTIVE
+        e.config.button = nil
+    else
+        e.config.colour = G.C.GREEN
+        e.config.button = 'reroll_buffoon'
+    end
+  end
+
   G.FUNCS.can_skip_booster = function(e)
-    if G.pack_cards and (G.pack_cards.cards[1]) and 
-    (G.STATE == G.STATES.PLANET_PACK or G.STATE == G.STATES.STANDARD_PACK or G.STATE == G.STATES.BUFFOON_PACK or (G.hand and (G.hand.cards[1] or (G.hand.config.card_limit <= 0)))) then 
+    if G.pack_cards and not (G.GAME.STOP_USE and G.GAME.STOP_USE > 0) and (G.STATE == G.STATES.PLANET_PACK or G.STATE == G.STATES.STANDARD_PACK or G.STATE == G.STATES.BUFFOON_PACK or G.STATE == G.STATES.TAROT_PACK or G.STATE == G.STATES.SPECTRAL_PACK) then
         e.config.colour = G.C.GREY
         e.config.button = 'skip_booster'
     else
@@ -2160,7 +2475,7 @@ end
     local dont_dissolve = nil
     local delay_fac = 1
 
-    if card:check_use() then 
+    if (e.config.id ~= 'buy_from_pack' and card:check_use()) or (e.config.id == 'buy_from_pack' and not G.FUNCS.check_for_buy_space(card)) then 
       G.E_MANAGER:add_event(Event({func = function()
         e.disable_button = nil
         e.config.button = 'use_card'
@@ -2185,7 +2500,7 @@ end
       G.STATES.PLAY_TAROT
       
     G.CONTROLLER.locks.use = true
-    if G.booster_pack and not G.booster_pack.alignment.offset.py and (card.ability.consumeable or not (G.GAME.pack_choices and G.GAME.pack_choices > 1)) then
+    if G.booster_pack and not G.booster_pack.alignment.offset.py and (card.ability.consumeable or not (G.GAME.pack_choices and G.GAME.pack_choices > 1)) and e.config.id ~= 'buy_from_pack' then
       G.booster_pack.alignment.offset.py = G.booster_pack.alignment.offset.y
       G.booster_pack.alignment.offset.y = G.ROOM.T.y + 29
     end
@@ -2208,7 +2523,14 @@ end
 
     if card.area then card.area:remove_card(card) end
     
-    if card.ability.consumeable then
+    if card.ability.consumeable and e.config.id == 'buy_from_pack' then
+      card:add_to_deck()
+      G.consumeables:emplace(card)
+      play_sound('card1')
+      dont_dissolve = true
+      delay_fac = 0.2
+      ease_dollars(-card.cost)
+    elseif card.ability.consumeable then
       if G.STATE == G.STATES.TAROT_PACK or G.STATE == G.STATES.PLANET_PACK or G.STATE == G.STATES.SPECTRAL_PACK then
         card.T.x = G.hand.T.x + G.hand.T.w/2 - card.T.w/2
         card.T.y = G.hand.T.y + G.hand.T.h/2 - card.T.h/2 - 0.5
@@ -2270,6 +2592,11 @@ end
                   if area == G.consumeables then
                     G.booster_pack.alignment.offset.y = G.booster_pack.alignment.offset.py
                     G.booster_pack.alignment.offset.py = nil
+                  elseif e.config.id == 'buy_from_pack' then
+                    if G.booster_pack.alignment.offset.py then 
+                      G.booster_pack.alignment.offset.y = G.booster_pack.alignment.offset.py
+                      G.booster_pack.alignment.offset.py = nil
+                    end
                   elseif G.GAME.pack_choices and G.GAME.pack_choices > 1 then
                     if G.booster_pack.alignment.offset.py then 
                       G.booster_pack.alignment.offset.y = G.booster_pack.alignment.offset.py
@@ -2404,6 +2731,12 @@ end
 G.FUNCS.buy_from_shop = function(e)
     local c1 = e.config.ref_table
     if c1 and c1:is(Card) then
+      if e.config.id == 'buy_and_use' then
+        if c1:check_use() then
+          e.disable_button = nil
+          return false
+        end
+      end
       if e.config.id ~= 'buy_and_use' then
         if not G.FUNCS.check_for_buy_space(c1) then
           e.disable_button = nil
@@ -2555,6 +2888,70 @@ end
     end
   end
 
+  G.FUNCS.reroll_celestial = function(e)
+    stop_use()
+    ease_dollars(-G.GAME.reroll_celestial_cost)
+    G.GAME.reroll_celestial_press = true
+    G.E_MANAGER:add_event(Event({trigger = 'immediate', func = function()
+      local _size = #G.pack_cards.cards or 1
+      for i = #G.pack_cards.cards, 1, -1 do
+        local c = G.pack_cards:remove_card(G.pack_cards.cards[i])
+        c:remove()
+        c = nil
+      end
+      play_sound('coin2')
+      play_sound('other1')
+      for i = 1, _size do
+        local card = nil      
+        if G.GAME.used_vouchers.v_telescope and i == 1 then
+          local _planet, _hand, _tally = nil, nil, 0
+          for k, v in ipairs(G.handlist) do
+            if G.GAME.hands[v].visible and G.GAME.hands[v].played > _tally then
+              _hand = v
+              _tally = G.GAME.hands[v].played
+            end
+          end
+          if _hand then
+            for k, v in pairs(G.P_CENTER_POOLS.Planet) do
+              if v.config.hand_type == _hand then
+                _planet = v.key
+              end
+            end
+          end
+          card = create_card("Planet", G.pack_cards, nil, nil, true, true, _planet, 'pl2'..G.GAME.round_resets.ante)
+        else
+          card = create_card("Planet", G.pack_cards, nil, nil, true, true, nil, 'pl2'..G.GAME.round_resets.ante)
+        end
+        card:start_materialize({G.C.WHITE, G.C.WHITE}, nil, 1.5*G.SETTINGS.GAMESPEED)
+        G.pack_cards:emplace(card)
+        card:juice_up()
+      end
+    return true end}))
+  end
+  
+  G.FUNCS.reroll_buffoon = function(e)
+    stop_use()
+    ease_dollars(-G.GAME.reroll_buffoon_cost)
+    G.GAME.reroll_buffoon_press = true
+    G.E_MANAGER:add_event(Event({trigger = 'immediate', func = function()
+      local _size = #G.pack_cards.cards or 1
+      for i = #G.pack_cards.cards, 1, -1 do
+        local c = G.pack_cards:remove_card(G.pack_cards.cards[i])
+        c:remove()
+        c = nil
+      end
+      play_sound('coin2')
+      play_sound('other1')
+      for i = 1, _size do
+        local card = nil      
+        card = create_card("Joker", G.pack_cards, nil, nil, true, true, nil, 'buf1'..G.GAME.round_resets.ante)
+        card:start_materialize({G.C.WHITE, G.C.WHITE}, nil, 1.5*G.SETTINGS.GAMESPEED)
+        G.pack_cards:emplace(card)
+        card:juice_up()
+      end
+    return true end}))
+  end
+
   G.FUNCS.skip_booster = function(e)
     for i = 1, #G.jokers.cards do
       G.jokers.cards[i]:calculate_joker({skipping_booster = true})
@@ -2590,6 +2987,9 @@ end
     G.E_MANAGER:add_event(Event({trigger = 'after',delay = 0.2*delayfac,
     func = function()
       G.FUNCS.draw_from_hand_to_deck()
+      G.GAME.STANDARD_PACK_SELL = nil
+      G.GAME.reroll_celestial_press = nil
+      G.GAME.reroll_buffoon_press = nil
       G.E_MANAGER:add_event(Event({trigger = 'after',delay = 0.2*delayfac,
           func = function()
                 if G.shop and G.shop.alignment.offset.py then 
@@ -2614,16 +3014,16 @@ end
                 G.GAME.PACK_INTERRUPT = nil
           return true
       end}))
-      for i = 1, #G.GAME.tags do
-        if G.GAME.tags[i]:apply_to_run({type = 'new_blind_choice'}) then break end
-      end
-
+      
       G.E_MANAGER:add_event(Event({trigger = 'after',delay = 0.2*delayfac,
           func = function()
             save_run()
             return true
       end}))
-
+      
+      for i = 1, #G.GAME.tags do
+        if G.GAME.tags[i]:apply_to_run({type = 'new_blind_choice'}) then break end
+      end
       return true
     end}))
   end
@@ -2799,7 +3199,7 @@ end
 
   G.FUNCS.reroll_boss = function(e) 
     stop_use()
-    G.GAME.round_resets.boss_rerolled = true
+    if not G.from_boss_tag then G.GAME.round_resets.boss_rerolled = true end
     if not G.from_boss_tag then ease_dollars(-10) end
     G.from_boss_tag = nil
     G.CONTROLLER.locks.boss_reroll = true
@@ -2906,7 +3306,7 @@ end
         return true
       end
     }))
-    G.E_MANAGER:add_event(Event({ func = function() save_run(); return true end}))
+    G.E_MANAGER:add_event(Event({ func = function() G.E_MANAGER:add_event(Event({func = function() G.E_MANAGER:add_event(Event({func = function() save_run(); return true end})) return true end})) return true end}))
   end
 
 G.FUNCS.cash_out = function(e)
@@ -2944,12 +3344,14 @@ G.FUNCS.cash_out = function(e)
         }))
         play_sound("coin7")
         G.VIBRATION = G.VIBRATION + 1
+        G.MOBILE_VIBRATION_QUEUE = math.max(G.MOBILE_VIBRATION_QUEUE or 0, 2)
       end
       ease_chips(0)
       if G.GAME.round_resets.blind_states.Boss == 'Defeated' then 
         G.GAME.round_resets.blind_ante = G.GAME.round_resets.ante
         G.GAME.round_resets.blind_tags.Small = get_next_tag_key()
         G.GAME.round_resets.blind_tags.Big = get_next_tag_key()
+        G.GAME.round_resets.blind_tags.Boss = get_next_tag_key('Boss')
       end
       reset_blinds()
       delay(0.6)
