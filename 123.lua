@@ -1,6 +1,6 @@
 function set_screen_positions()
     if G.STAGE == G.STAGES.RUN then
-        G.hand.T.x = G.TILE_W - G.hand.T.w - 2.85
+        G.hand.T.x = G.TILE_W - G.hand.T.w - 3.55
         G.hand.T.y = G.TILE_H - G.hand.T.h
 
         G.play.T.x = G.hand.T.x + (G.hand.T.w - G.play.T.w)/2
@@ -9,7 +9,7 @@ function set_screen_positions()
         G.jokers.T.x = G.hand.T.x - 0.1
         G.jokers.T.y = 0
 
-        G.consumeables.T.x = G.jokers.T.x + G.jokers.T.w + 0.2
+        G.consumeables.T.x = G.jokers.T.x + G.jokers.T.w + 0.8
         G.consumeables.T.y = 0
 
         G.deck.T.x = G.TILE_W - G.deck.T.w - 0.5
@@ -39,6 +39,11 @@ function set_screen_positions()
 end
 
 function ease_chips(mod)
+    if G.SETTINGS.reduce_animation then
+        mod = mod or 0
+        G.GAME.chips = mod
+        return
+    end
     G.E_MANAGER:add_event(Event({
         trigger = 'immediate',
         func = function()
@@ -66,8 +71,16 @@ function ease_chips(mod)
 end
 
 function ease_dollars(mod, instant)
+    if mod > 0 and G.SETTINGS.double_ease then
+        mod = mod*2
+    end
+    if G.SETTINGS.reduce_animation then
+        G.GAME.dollars = G.GAME.dollars + (mod or 0)
+        G.update_dollar_UI = true
+        return
+    end
     local function _mod(mod)
-        local dollar_UI = G.HUD:get_UIE_by_ID('dollar_text_UI')
+        local dollar_UI = G.HUD:get_UIE_by_ID('dollar_text_UI') 
         mod = mod or 0
         local text = '+'..localize('$')
         local col = G.C.MONEY
@@ -89,6 +102,7 @@ function ease_dollars(mod, instant)
           scale = 0.8, 
           hold = 0.7,
           cover = dollar_UI.parent,
+          font = G.LANGUAGES['en-us'].font,
           cover_colour = col,
           align = 'cm',
           })
@@ -130,6 +144,7 @@ function ease_discard(mod, instant, silent)
           scale = 0.8, 
           hold = 0.7,
           cover = discard_UI.parent,
+          font = G.LANGUAGES['en-us'].font,
           cover_colour = col,
           align = 'cm',
           })
@@ -169,6 +184,7 @@ function ease_hands_played(mod, instant)
           scale = 0.8, 
           hold = 0.7,
           cover = hand_UI.parent,
+          font = G.LANGUAGES['en-us'].font,
           cover_colour = col,
           align = 'cm',
           })
@@ -210,6 +226,7 @@ function ease_ante(mod)
             scale = 1, 
             hold = 0.7,
             cover = ante_UI.parent,
+            font = G.LANGUAGES['en-us'].font,
             cover_colour = col,
             align = 'cm',
             })
@@ -244,6 +261,7 @@ function ease_round(mod)
             scale = 1, 
             hold = 0.7,
             cover = round_UI.parent,
+            font = G.LANGUAGES['en-us'].font,
             cover_colour = col,
             align = 'cm',
             })
@@ -412,6 +430,7 @@ function draw_card(from, to, percent, dir, sort, card, delay, mute, stay_flipped
             if not mute and drawn then
                 if from == G.deck or from == G.hand or from == G.play or from == G.jokers or from == G.consumeables or from == G.discard then
                     G.VIBRATION = G.VIBRATION + 0.6
+                    G.MOBILE_VIBRATION_QUEUE = math.max(G.MOBILE_VIBRATION_QUEUE or 0, 1)
                 end
                 play_sound('card1', 0.85 + percent*0.2/100, 0.6*(vol or 1))
             end
@@ -463,6 +482,12 @@ end
 
 function level_up_hand(card, hand, instant, amount)
     amount = amount or 1
+    if G.SETTINGS.reduce_animation and hand then
+        G.GAME.hands[hand].level = math.max(0, G.GAME.hands[hand].level + amount)
+        G.GAME.hands[hand].mult = math.max(G.GAME.hands[hand].s_mult + G.GAME.hands[hand].l_mult*(G.GAME.hands[hand].level - 1), 1)
+        G.GAME.hands[hand].chips = math.max(G.GAME.hands[hand].s_chips + G.GAME.hands[hand].l_chips*(G.GAME.hands[hand].level - 1), 0)
+        return
+    end
     G.GAME.hands[hand].level = math.max(0, G.GAME.hands[hand].level + amount)
     G.GAME.hands[hand].mult = math.max(G.GAME.hands[hand].s_mult + G.GAME.hands[hand].l_mult*(G.GAME.hands[hand].level - 1), 1)
     G.GAME.hands[hand].chips = math.max(G.GAME.hands[hand].s_chips + G.GAME.hands[hand].l_chips*(G.GAME.hands[hand].level - 1), 0)
@@ -493,6 +518,24 @@ function level_up_hand(card, hand, instant, amount)
 end
 
 function update_hand_text(config, vals)
+    if G.SETTINGS.reduce_animation then
+        if vals.handname and G.GAME.current_round.current_hand.handname ~= vals.handname then
+            G.GAME.current_round.current_hand.handname = vals.handname
+        end
+        if vals.level and G.GAME.current_round.current_hand.hand_level ~= ' '..localize('k_lvl')..tostring(vals.level) then
+            if vals.level == '' then
+                G.GAME.current_round.current_hand.hand_level = vals.level
+            else
+                G.GAME.current_round.current_hand.hand_level = ' '..localize('k_lvl')..tostring(vals.level)
+                if type(vals.level) == 'number' then 
+                    G.hand_text_area.hand_level.config.colour = G.C.HAND_LEVELS[math.min(vals.level, 7)]
+                else
+                    G.hand_text_area.hand_level.config.colour = G.C.HAND_LEVELS[1]
+                end
+            end
+        end
+        return
+    end
     G.E_MANAGER:add_event(Event({--This is the Hand name text for the poker hand
     trigger = 'before',
     blockable = not config.immediate,
@@ -777,6 +820,12 @@ function set_main_menu_UI()
 end
 
 function card_eval_status_text(card, eval_type, amt, percent, dir, extra)
+    if G.SETTINGS.reduce_animation then
+        if extra and extra.playing_cards_created then
+            playing_card_joker_effects(extra.playing_cards_created)
+        end
+        return
+    end
     percent = percent or (0.9 + 0.2*math.random())
     if dir == 'down' then 
         percent = 1-percent
@@ -931,6 +980,8 @@ function add_round_eval_row(config)
     local scale = 0.9
 
     if config.name ~= 'bottom' then
+        G.GAME.total_cashout_rows = (G.GAME.total_cashout_rows or 0) + 1
+        if G.GAME.total_cashout_rows > 7 then return end
         if config.name ~= 'blind1' then
             if not G.round_eval.divider_added then 
                 G.E_MANAGER:add_event(Event({
@@ -979,7 +1030,7 @@ function add_round_eval_row(config)
                         }},
                         {n=G.UIT.R, config={align = 'cm', minh = 0.8}, nodes={
                             {n=G.UIT.O, config={w=0.5,h=0.5 , object = stake_sprite, hover = true, can_collide = false}},
-                            {n=G.UIT.T, config={text = G.GAME.blind.chip_text, scale = scale_number(G.GAME.blind.chips, scale, 100000), colour = G.C.RED, shadow = true}}
+                            {n=G.UIT.T, config={text = G.GAME.blind.chip_text, scale = scale_number(G.GAME.blind.chips, scale, 100000), lang = G.LANGUAGES['en-us'], colour = G.C.RED, shadow = true}}
                         }}
                     }}) 
                 elseif string.find(config.name, 'tag') then
@@ -992,15 +1043,15 @@ function add_round_eval_row(config)
                     table.insert(left_text, {n=G.UIT.O, config={w=0.7,h=0.7 , object = blind_sprite, hover = true, can_collide = false}})
                     table.insert(left_text, {n=G.UIT.O, config={object = DynaText({string = {config.condition}, colours = {G.C.UI.TEXT_LIGHT}, shadow = true, pop_in = 0, scale = 0.4*scale, silent = true})}})                   
                 elseif config.name == 'hands' then
-                    table.insert(left_text, {n=G.UIT.T, config={text = config.disp or config.dollars, scale = 0.8*scale, colour = G.C.BLUE, shadow = true, juice = true}})
+                    table.insert(left_text, {n=G.UIT.T, config={text = config.disp or config.dollars, scale = 0.8*scale, lang = G.LANGUAGES['en-us'], colour = G.C.BLUE, shadow = true, juice = true}})
                     table.insert(left_text, {n=G.UIT.O, config={object = DynaText({string = {" "..localize{type = 'variable', key = 'remaining_hand_money', vars = {G.GAME.modifiers.money_per_hand or 1}}}, colours = {G.C.UI.TEXT_LIGHT}, shadow = true, pop_in = 0, scale = 0.4*scale, silent = true})}})
                 elseif config.name == 'discards' then
-                    table.insert(left_text, {n=G.UIT.T, config={text = config.disp or config.dollars, scale = 0.8*scale, colour = G.C.RED, shadow = true, juice = true}})
+                    table.insert(left_text, {n=G.UIT.T, config={text = config.disp or config.dollars, scale = 0.8*scale, lang = G.LANGUAGES['en-us'], colour = G.C.RED, shadow = true, juice = true}})
                     table.insert(left_text, {n=G.UIT.O, config={object = DynaText({string = {" "..localize{type = 'variable', key = 'remaining_discard_money', vars = {G.GAME.modifiers.money_per_discard or 0}}}, colours = {G.C.UI.TEXT_LIGHT}, shadow = true, pop_in = 0, scale = 0.4*scale, silent = true})}})
                 elseif string.find(config.name, 'joker') then
                     table.insert(left_text, {n=G.UIT.O, config={object = DynaText({string = localize{type = 'name_text', set = config.card.config.center.set, key = config.card.config.center.key}, colours = {G.C.FILTER}, shadow = true, pop_in = 0, scale = 0.6*scale, silent = true})}})
                 elseif config.name == 'interest' then
-                    table.insert(left_text, {n=G.UIT.T, config={text = num_dollars, scale = 0.8*scale, colour = G.C.MONEY, shadow = true, juice = true}})
+                    table.insert(left_text, {n=G.UIT.T, config={text = num_dollars, scale = 0.8*scale, lang = G.LANGUAGES['en-us'], colour = G.C.MONEY, shadow = true, juice = true}})
                     table.insert(left_text,{n=G.UIT.O, config={object = DynaText({string = {" "..localize{type = 'variable', key = 'interest', vars = {G.GAME.interest_amount, 5, G.GAME.interest_amount*G.GAME.interest_cap/5}}}, colours = {G.C.UI.TEXT_LIGHT}, shadow = true, pop_in = 0, scale = 0.4*scale, silent = true})}})
                 end
                 local full_row = {n=G.UIT.R, config={align = "cm", minw = 5}, nodes={
@@ -1026,7 +1077,7 @@ function add_round_eval_row(config)
                 func = function()
                     G.round_eval:add_child(
                             {n=G.UIT.R, config={align = "cm", id = 'dollar_row_'..(dollar_row+1)..'_'..config.name}, nodes={
-                                {n=G.UIT.O, config={object = DynaText({string = {localize('$')..num_dollars}, colours = {G.C.MONEY}, shadow = true, pop_in = 0, scale = 0.65, float = true})}}
+                                {n=G.UIT.O, config={object = DynaText({string = {localize('$')..num_dollars}, font = G.LANGUAGES['en-us'].font, colours = {G.C.MONEY}, shadow = true, pop_in = 0, scale = 0.65, float = true})}}
                             }},
                             G.round_eval:get_UIE_by_ID('dollar_'..config.name))
 
@@ -1047,7 +1098,7 @@ function add_round_eval_row(config)
                                 dollar_row = dollar_row+1
                         end
 
-                        local r = {n=G.UIT.T, config={text = localize('$'), colour = G.C.MONEY, scale = ((num_dollars > 20 and 0.28) or (num_dollars > 9 and 0.43) or 0.58), shadow = true, hover = true, can_collide = false, juice = true}}
+                        local r = {n=G.UIT.T, config={text = localize('$'), lang = G.LANGUAGES['en-us'], colour = G.C.MONEY, scale = ((num_dollars > 20 and 0.28) or (num_dollars > 9 and 0.43) or 0.58), shadow = true, hover = true, can_collide = false, juice = true}}
                         play_sound('coin3', 0.9+0.2*math.random(), 0.7 - (num_dollars > 20 and 0.2 or 0))
                         
                         if config.name == 'blind1' then 
@@ -1055,6 +1106,7 @@ function add_round_eval_row(config)
                         end
 
                         G.round_eval:add_child(r,G.round_eval:get_UIE_by_ID('dollar_row_'..(dollar_row)..'_'..config.name))
+                        G.MOBILE_VIBRATION_QUEUE = math.max(G.MOBILE_VIBRATION_QUEUE or 0, 1)
                         G.VIBRATION = G.VIBRATION + 0.4
                         return true
                     end
@@ -1070,7 +1122,7 @@ function add_round_eval_row(config)
                     definition = {n=G.UIT.ROOT, config={align = 'cm', colour = G.C.CLEAR}, nodes={
                         {n=G.UIT.R, config={id = 'cash_out_button', align = "cm", padding = 0.1, minw = 7, r = 0.15, colour = G.C.ORANGE, shadow = true, hover = true, one_press = true, button = 'cash_out', focus_args = {snap_to = true}}, nodes={
                             {n=G.UIT.T, config={text = localize('b_cash_out')..": ", scale = 1, colour = G.C.UI.TEXT_LIGHT, shadow = true}},
-                            {n=G.UIT.T, config={text = localize('$')..config.dollars, scale = 1.2*scale, colour = G.C.WHITE, shadow = true, juice = true}}
+                            {n=G.UIT.T, config={text = localize('$')..config.dollars, scale = 1.2*scale, lang = G.LANGUAGES['en-us'], colour = G.C.WHITE, shadow = true, juice = true}}
                     }},}},
                     config = {
                       align = 'tmi',
@@ -1088,6 +1140,7 @@ function add_round_eval_row(config)
                 
                 play_sound('coin6', config.pitch or 1)
                 G.VIBRATION = G.VIBRATION + 1
+                G.MOBILE_VIBRATION_QUEUE = math.max(G.MOBILE_VIBRATION_QUEUE or 0, 2)
                 return true
             end
         }))
@@ -1118,6 +1171,7 @@ function change_shop_size(mod)
 end
 
 function juice_card(card)
+    if G.SETTINGS.reduce_animation then return end
     G.E_MANAGER:add_event(Event({
         trigger = 'immediate',
         func = (function() card:juice_up(0.7);return true end)
@@ -1150,7 +1204,11 @@ function update_canvas_juice(dt)
     G.VIBRATION = 0
     G.CURR_VIBRATION = (1-15*dt)*G.CURR_VIBRATION
     if not G.SETTINGS.rumble then G.CURR_VIBRATION = 0 end
-    if G.CONTROLLER.GAMEPAD.object and G.F_RUMBLE then G.CONTROLLER.GAMEPAD.object:setVibration(G.CURR_VIBRATION*0.4*G.F_RUMBLE, G.CURR_VIBRATION*0.4*G.F_RUMBLE) end
+    if G.F_RUMBLE and G.SETTINGS.rumble then
+        if G.CONTROLLER.GAMEPAD and G.CONTROLLER.GAMEPAD.object then G.CONTROLLER.GAMEPAD.object:setVibration(G.CURR_VIBRATION*0.4*G.F_RUMBLE, G.CURR_VIBRATION*0.4*G.F_RUMBLE)
+        elseif G.MOBILE_VIBRATION_QUEUE > 0 then love.system.vibrate(0.01, G.MOBILE_VIBRATION_QUEUE == 1 and 'light' or G.MOBILE_VIBRATION_QUEUE == 2 and 'medium' or G.MOBILE_VIBRATION_QUEUE == 3 and 'heavy' or 'rigid' ); G.MOBILE_VIBRATION_QUEUE = 0
+        end
+    end
 end
 
 function juice_card_until(card, eval_func, first, delay)
@@ -2264,7 +2322,10 @@ function create_card(_type, area, legendary, _rarity, skip_materialize, soulable
 end
 
 function copy_card(other, new_card, card_scale, playing_card, strip_edition)
-    local new_card = new_card or Card(other.T.x, other.T.y, G.CARD_W*(card_scale or 1), G.CARD_H*(card_scale or 1), G.P_CARDS.empty, G.P_CENTERS.c_base, {playing_card = playing_card})
+    local new_card = new_card or Card(other.T.x, other.T.y, G.CARD_W*(card_scale or 1), G.CARD_H*(card_scale or 1), G.P_CARDS.empty, G.P_CENTERS.c_base, {playing_card = playing_card, bypass_back = G.GAME.selected_back.pos})
+    remove_all(new_card.children)
+    new_card.children = {}
+    new_card.children.shadow = Moveable(0, 0, 0, 0)
     new_card:set_ability(other.config.center)
     new_card.ability.type = other.ability.type
     new_card:set_base(other.config.card)
@@ -2412,8 +2473,31 @@ end
 
 function reset_ancient_card()
     local ancient_suits = {}
-    for k, v in ipairs({'Spades','Hearts','Clubs','Diamonds'}) do
-        if v ~= G.GAME.current_round.ancient_card.suit then ancient_suits[#ancient_suits + 1] = v end
+    local ancient_decksuits = {}
+    for k, v in ipairs(G.playing_cards) do
+        if v.ability.effect ~= 'Stone Card' then
+            if not v.config.center.no_suit then
+                    ancient_decksuits[#ancient_decksuits + 1] = v.base.suit
+            end
+        end
+    end
+    if #ancient_decksuits >= 1 then
+        local first_element = ancient_decksuits[1]
+        for _, v in ipairs(ancient_decksuits) do
+            if v ~= first_element then
+                for k, v in ipairs(ancient_decksuits) do
+                    if v ~= G.GAME.current_round.ancient_card.suit then ancient_suits[#ancient_suits + 1] = v end
+                end
+            elseif v == first_element then
+                for k, v in ipairs(ancient_decksuits) do
+                    ancient_suits[#ancient_suits + 1] = v
+                end
+            end
+        end
+    else
+        for k, v in ipairs({'Spades','Hearts','Clubs','Diamonds'}) do
+            if v ~= G.GAME.current_round.ancient_card.suit then ancient_suits[#ancient_suits + 1] = v end
+        end
     end
     local ancient_card = pseudorandom_element(ancient_suits, pseudoseed('anc'..G.GAME.round_resets.ante))
     G.GAME.current_round.ancient_card.suit = ancient_card
@@ -2636,6 +2720,7 @@ function generate_card_ui(_c, full_UI_table, specific_vars, card_type, badges, h
         elseif _c.name == 'Glass Joker' then info_queue[#info_queue+1] = G.P_CENTERS.m_glass 
         elseif _c.name == 'Golden Ticket' then info_queue[#info_queue+1] = G.P_CENTERS.m_gold 
         elseif _c.name == 'Lucky Cat' then info_queue[#info_queue+1] = G.P_CENTERS.m_lucky 
+        elseif _c.name == 'DNA' then info_queue[#info_queue+1] = G.P_CENTERS.c_cryptid; info_queue[#info_queue+1] = {key = 'e_negative_consumable', set = 'Edition', config = {extra = 1}}
         elseif _c.name == 'Midas Mask' then info_queue[#info_queue+1] = G.P_CENTERS.m_gold
         elseif _c.name == 'Invisible Joker' then 
             if G.jokers and G.jokers.cards then
@@ -2661,7 +2746,7 @@ function generate_card_ui(_c, full_UI_table, specific_vars, card_type, badges, h
         elseif _c.name == 'Polychrome Tag' then info_queue[#info_queue+1] = G.P_CENTERS.e_polychrome 
         elseif _c.name == 'Charm Tag' then info_queue[#info_queue+1] = G.P_CENTERS.p_arcana_mega_1 
         elseif _c.name == 'Meteor Tag' then info_queue[#info_queue+1] = G.P_CENTERS.p_celestial_mega_1 
-        elseif _c.name == 'Ethereal Tag' then info_queue[#info_queue+1] = G.P_CENTERS.p_spectral_normal_1 
+        elseif _c.name == 'Ethereal Tag' then info_queue[#info_queue+1] = G.P_CENTERS.p_spectral_mega_1 
         elseif _c.name == 'Standard Tag' then info_queue[#info_queue+1] = G.P_CENTERS.p_standard_mega_1 
         elseif _c.name == 'Buffoon Tag' then info_queue[#info_queue+1] = G.P_CENTERS.p_buffoon_mega_1 
         end
@@ -2703,7 +2788,7 @@ function generate_card_ui(_c, full_UI_table, specific_vars, card_type, badges, h
         elseif _c.effect == 'Steel Card' then loc_vars = {_c.config.h_x_mult}
         elseif _c.effect == 'Stone Card' then loc_vars = {((specific_vars and specific_vars.bonus_chips) or _c.config.bonus)}
         elseif _c.effect == 'Gold Card' then loc_vars = {_c.config.h_dollars}
-        elseif _c.effect == 'Lucky Card' then loc_vars = {G.GAME.probabilities.normal, _c.config.mult, 5, _c.config.p_dollars, 15}
+        elseif _c.effect == 'Lucky Card' then loc_vars = {G.GAME.probabilities.normal, _c.config.mult, 5, _c.config.p_dollars, 10}
         end
         localize{type = 'descriptions', key = _c.key, set = _c.set, nodes = desc_nodes, vars = loc_vars}
         if _c.name ~= 'Stone Card' and ((specific_vars and specific_vars.bonus_chips) or _c.config.bonus) then
