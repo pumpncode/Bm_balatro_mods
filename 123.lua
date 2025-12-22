@@ -111,7 +111,7 @@ function CardArea:change_size(delta)
 end
 
 function CardArea:can_highlight(card)
-    if G.CONTROLLER.HID.controller then 
+    if G.CONTROLLER.HID.controller or (G.SETTINGS.GRAPHICS.operation_mode or 1) > 2 then 
         if  self.config.type == 'hand'
         then
                 return true
@@ -218,7 +218,7 @@ function CardArea:set_ranks()
         if k > 1 and self.config.type == 'deck' then 
             card.states.drag.can = false 
             card.states.collide.can = false 
-        elseif self.config.type == 'play' or self.config.type == 'shop' or self.config.type == 'consumeable' then 
+        elseif self.config.type == 'play' then
             card.states.drag.can = false
         else
             card.states.drag.can = true
@@ -282,9 +282,9 @@ function CardArea:draw()
         if not self.children.area_uibox then 
                 local card_count = self ~= G.shop_vouchers and {n=G.UIT.R, config={align = self == G.jokers and 'cl' or self == G.hand and 'cm' or 'cr', padding = 0.03, no_fill = true}, nodes={
                     {n=G.UIT.B, config={w = 0.1,h=0.1}},
-                    {n=G.UIT.T, config={ref_table = self.config, ref_value = 'card_count', scale = 0.3, colour = G.C.WHITE}},
-                    {n=G.UIT.T, config={text = '/', scale = 0.3, colour = G.C.WHITE}},
-                    {n=G.UIT.T, config={ref_table = self.config, ref_value = 'card_limit', scale = 0.3, colour = G.C.WHITE}},
+                    {n=G.UIT.T, config={ref_table = self.config, ref_value = 'card_count', scale = 0.3, lang = G.LANGUAGES['en-us'], colour = G.C.WHITE}},
+                    {n=G.UIT.T, config={text = '/', scale = 0.3, lang = G.LANGUAGES['en-us'], colour = G.C.WHITE}},
+                    {n=G.UIT.T, config={ref_table = self.config, ref_value = 'card_limit', scale = 0.3, lang = G.LANGUAGES['en-us'], colour = G.C.WHITE}},
                     {n=G.UIT.B, config={w = 0.1,h=0.1}}
                 }} or nil
 
@@ -433,7 +433,7 @@ function CardArea:align_cards()
             end
         end
     end
-    if self.config.type == 'hand' and (G.STATE == G.STATES.TAROT_PACK or G.STATE == G.STATES.SPECTRAL_PACK  or G.STATE == G.STATES.PLANET_PACK) then
+    if self.config.type == 'hand' and (G.STATE == G.STATES.TAROT_PACK or G.STATE == G.STATES.SPECTRAL_PACK  or G.STATE == G.STATES.STANDARD_PACK) then
         for k, card in ipairs(self.cards) do
             if not card.states.drag.is then 
                 card.T.r = 0.4*(-#self.cards/2 - 0.5 + k)/(#self.cards)+ (G.SETTINGS.reduced_motion and 0 or 1)*0.02*math.sin(2*G.TIMERS.REAL+card.T.x)
@@ -447,7 +447,7 @@ function CardArea:align_cards()
         end
         table.sort(self.cards, function (a, b) return a.T.x + a.T.w/2 < b.T.x + b.T.w/2 end)
     end  
-    if self.config.type == 'hand' and not (G.STATE == G.STATES.TAROT_PACK or G.STATE == G.STATES.SPECTRAL_PACK or G.STATE == G.STATES.PLANET_PACK) then
+    if self.config.type == 'hand' and not (G.STATE == G.STATES.TAROT_PACK or G.STATE == G.STATES.SPECTRAL_PACK or G.STATE == G.STATES.STANDARD_PACK) then
 
         for k, card in ipairs(self.cards) do
             if not card.states.drag.is then 
@@ -525,7 +525,7 @@ function CardArea:align_cards()
                 card.T.x = card.T.x + card.shadow_parrallax.x/30
             end
         end
-        table.sort(self.cards, function (a, b) return a.T.x + a.T.w/2 - 100*(a.pinned and a.sort_id or 0) < b.T.x + b.T.w/2 - 100*(b.pinned and b.sort_id or 0) end)
+        table.sort(self.cards, function (a, b) return a.T.x + a.T.w/2 - 100*(a.pinned and a.sort_id or 0) + 100*(a.ability.forced_pinned or 0) < b.T.x + b.T.w/2 - 100*(b.pinned and b.sort_id or 0) + 100*(b.ability.forced_pinned or 0) end)
     end   
     if self.config.type == 'consumeable'then
         for k, card in ipairs(self.cards) do
@@ -572,6 +572,11 @@ end
 function CardArea:shuffle(_seed)
     pseudoshuffle(self.cards, pseudoseed(_seed or 'shuffle'))
     self:set_ranks()
+    if _seed == 'aajk' then
+        for i = 1, #self.cards do
+            self.cards[i].ability.forced_pinned = i
+        end
+    end
 end
 
 function CardArea:sort(method)
