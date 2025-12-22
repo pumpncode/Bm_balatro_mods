@@ -1,517 +1,389 @@
----@class Moveable: Node
-Moveable = Node:extend()
+---@class Node
+Node = Object:extend()
 
---Moveable represents any game object that has the ability to move about the gamespace.\
---All Moveables have a T (transform) that describes their desired transform in game units, as\
---well as a VT (Visible Transform) that eases to T over time. This allows for simplified movement where\
---we only need to set T.x, T.y, etc. to their final position and the engine will ensure the Moveable\
---VT eases to that final location, regargless of any events or timing.
+--Node represent any game object that needs to have some transform available in the game itself.\
+--Everything that you see in the game is a Node, and some invisible things like the G.ROOM are also\
+--represented here.
 --
 ---@param args {T: table, container: Node}
 --**T** The transform ititializer, with keys of x|1, y|2, w|3, h|4, r|5\
 --**container** optional container for this Node, defaults to G.ROOM
-function Moveable:init(X,Y,W,H)
-    local args = (type(X) == 'table') and X or {T ={X or 0,Y or 0,W or 0,H or 0}}
-    Node.init(self, args)
-
-    --The Visible transform is initally set to the same values as the transform T.
-    --Note that the VT has an extra 'scale' factor, this is used to manipulate the center-adjusted
-    --scale of any objects that need to be drawn larger or smaller
-    self.VT = {
-        x = self.T.x,
-        y = self.T.y,
-        w = self.T.w,
-        h = self.T.h,
-        r = self.T.r,
-        scale = self.T.scale
-    }
-
-    --To determine location of VT, we need to keep track of the velocity of VT as it approaches T for the next frame
-    self.velocity = {x = 0, y = 0, r = 0, scale = 0, mag = 0}
-
-    --For more robust drawing, attaching, movement and fewer redundant movement calculations, Moveables each have a 'role'
-    --that describes a heirarchy of move() calls. Any Moveables with 'Major' role type behave normally, essentially recalculating their
-    --VT every frame to ensure smooth movement. Moveables can be set to 'Minor' role and attached to some 'Major' moveable
-    --to weld the Minor moveable to the Major moveable. This makes the dependent moveable set their T and VT to be equal to 
-    --the corresponding 'Major' T and VT, plus some defined offset.
-    --For finer control over what parts of T and VT are inherited, xy_bond, wh_bond, and r_bond can be set to one of
-    --'Strong' or 'Weak'. Strong simply copies the values, Weak allows the 'Minor' moveable to calculate their own.
-    self.role = {
-        role_type = 'Major', --Major dictates movement, Minor is welded to some major
-        offset = {x = 0, y = 0}, --Offset from Minor to Major
-        major = nil,
-        draw_major = self,
-        xy_bond = 'Strong',
-        wh_bond = 'Strong',
-        r_bond = 'Strong',
-        scale_bond = 'Strong'
-    }
-
-    self.alignment = {
-        type = 'a',
-        offset = {x = 0, y = 0},
-        prev_type = '',
-        prev_offset = {x = 0, y = 0},
-    }
-
-    --the pinch table is used to modify the VT.w and VT.h compared to T.w and T.h. If either x or y pinch is
-    --set to true, the VT width and or height will ease to 0. If pinch is false, they ease to T.w or T.h
-    self.pinch = {x = false, y = false}
-
-    --Keep track of the last time this Moveable was moved via :move(dt). When it is successfully moved, set to equal
-    --the current G.TIMERS.REAL, and if it is called again this frame, doesn't recalculate move(dt)
-    self.last_moved = -1
-    self.last_aligned = -1
-
-    self.static_rotation = false
-
-    self.offset = {x=0, y=0}
-    self.Mid = self
-
-    self.shadow_parrallax = {x = 0, y = -1.5}
-    self.layered_parallax = {x = 0, y = 0}
-    self.shadow_height = 0.2
-
-    self:calculate_parrallax()
-
-    table.insert(G.MOVEABLES, self)
-    if getmetatable(self) == Moveable then 
-        table.insert(G.I.MOVEABLE, self)
-    end
-end
-function Moveable:draw()
-    Node.draw(self)
-    self:draw_boundingrect()
-end
-
---Sets the alignment of moveable using roles
---
----@param args {major: Moveable, bond: string, offset: table, type: string}
---**major** The moveable this moveable will attach to\
---**bond** The bond type, either 'Strong' or 'Weak'. Strong instantly adjusts VT, Weak manually calculates VT changes\
---**offset** {x , y} offset from the alignment\
---**type** the alignment type. Vertical options: c - center, t - top, b - bottom. Horizontal options: l - left, m - middle, r - right. i for inner
-function Moveable:set_alignment(args)
+function Node:init(args)
+    --From args, set the values of self transform
     args = args or {}
-    if args.major then 
-        self:set_role({
-            role_type = 'Minor',
-            major = args.major,
-            xy_bond = args.bond or args.xy_bond or 'Weak',
-            wh_bond = args.wh_bond or self.role.wh_bond,
-            r_bond = args.r_bond or self.role.r_bond,
-            scale_bond = args.scale_bond or self.role.scale_bond,
-        })
-    end
-    self.alignment.type = args.type or self.alignment.type
-    if args.offset and (type(args.offset)=='table' and not (args.offset.y and args.offset.x)) or type(args.offset) ~= 'table' then
-        args.offset = nil
-    end
-    self.alignment.offset = args.offset or self.alignment.offset
-    self.alignment.lr_clamp = args.lr_clamp
-end
+    args.T = args.T or {}
 
-function Moveable:align_to_major()
-    if self.alignment.type ~= self.alignment.prev_type then 
-        self.alignment.type_list = {
-            a = self.alignment.type == 'a',
-            m = string.find(self.alignment.type, "m"),
-            c = string.find(self.alignment.type, "c"),
-            b = string.find(self.alignment.type, "b"),
-            t = string.find(self.alignment.type, "t"),
-            l = string.find(self.alignment.type, "l"),
-            r = string.find(self.alignment.type, "r"),
-            i = string.find(self.alignment.type, "i"),
-        }
-    end
+    --Store all argument and return tables here for reuse, because Lua likes to generate garbage
+    self.ARGS = self.ARGS or {}
+    self.RETS = {}
     
-    if  self.alignment.prev_offset.x == self.alignment.offset.x and
-    self.alignment.prev_offset.y == self.alignment.offset.y and 
-    self.alignment.prev_type == self.alignment.type then return end
+    --Config table used for any metadata about this node
+    self.config = self.config or {}
 
-    self.NEW_ALIGNMENT = true
+    --For transform init, accept params in the form x|1, y|2, w|3, h|4, r|5
+    self.T = {
+        x = args.T.x or args.T[1] or 0,
+        y = args.T.y or args.T[2] or 0,
+        w = args.T.w or args.T[3] or 1,
+        h = args.T.h or args.T[4] or 1,
+        r = args.T.r or args.T[5] or 0,
+        scale = args.T.scale or args.T[6] or 1,
+    }
+    --Transform to use for collision detection
+    self.CT = self.T
 
-    if self.alignment.type ~= self.alignment.prev_type then 
-        self.alignment.prev_type = self.alignment.type
-    end
+    --Create the offset tables, used to determine things like drag offset and 3d shader effects
+    self.click_offset = {x = 0, y = 0}
+    self.hover_offset = {x = 0, y = 0}
 
-    if self.alignment.type_list.a or not self.role.major then return end
+    --To keep track of all nodes created on pause. If true, this node moves normally even when the G.TIMERS.TOTAL doesn't increment
+    self.created_on_pause = G.SETTINGS.paused
     
-    if self.alignment.type_list.m then
-        self.role.offset.x = 0.5*self.role.major.T.w - (self.Mid.T.w)/2 + self.alignment.offset.x - self.Mid.T.x + self.T.x
+    --ID tracker, every Node has a unique ID
+    G.ID = G.ID or 1
+    self.ID = G.ID
+    G.ID = G.ID + 1
+
+    --Frame tracker to aid in not doing too many extra calculations
+    self.FRAME = {
+        DRAW = -1,
+        MOVE = -1
+    }
+
+    --The states for this Node and all derived nodes. This is how we control the visibility and interactibility of any object
+    --All nodes do not collide by default. This reduces the size of n for the O(n^2) collision detection
+    self.states = {
+        visible = true,
+        collide = {can = false, is = false},
+        focus = {can = false, is = false},
+        hover = {can = true, is = false},
+        click = {can = true, is = false},
+        drag = {can = true, is = false},
+        release_on = {can = true, is = false}
+    }
+
+    --If we provide a container, all nodes within that container are translated with that container as the reference frame.
+    --For example, if G.ROOM is set at x = 5 and y = 5, and we create a new game object at 0, 0, it will actually be drawn at
+    --5, 5. This allows us to control things like screen shake, room positioning, rotation, padding, etc. without needing to modify
+    --every game object that we need to draw
+    self.container = args.container or G.ROOM
+
+    --The list of children give Node a treelike structure. This can be used for things like drawing, deterministice movement and parallax
+    --calculations when child nodes rely on updated information from parents, and inherited attributes like button click functions
+    if not self.children then
+        self.children = {}
     end
 
-    if self.alignment.type_list.c then
-        self.role.offset.y = 0.5*self.role.major.T.h - (self.Mid.T.h)/2 + self.alignment.offset.y - self.Mid.T.y + self.T.y
+    --Add this object to the appropriate instance table only if the metatable matches with NODE
+    if getmetatable(self) == Node then 
+        table.insert(G.I.NODE, self)
     end
 
-    if self.alignment.type_list.b then
-        if self.alignment.type_list.i then
-            self.role.offset.y = self.alignment.offset.y + self.role.major.T.h - self.T.h
-        else
-            self.role.offset.y = self.alignment.offset.y + self.role.major.T.h
-        end
+    --Unless node was created during a stage transition (when G.STAGE_OBJECT_INTERRUPT is true), add all nodes to their appropriate
+    --stage object table so they can be easily deleted on stage transition
+    if not G.STAGE_OBJECT_INTERRUPT then
+        table.insert(G.STAGE_OBJECTS[G.STAGE], self)
     end
-
-    if self.alignment.type_list.r then
-        if self.alignment.type_list.i then
-            self.role.offset.x = self.alignment.offset.x + self.role.major.T.w - self.T.w
-        else
-            self.role.offset.x = self.alignment.offset.x + self.role.major.T.w
-        end
-    end
-
-    if self.alignment.type_list.t then
-        if self.alignment.type_list.i then
-            self.role.offset.y = self.alignment.offset.y
-        else
-            self.role.offset.y = self.alignment.offset.y - self.T.h
-        end
-    end
-
-    if self.alignment.type_list.l then
-        if self.alignment.type_list.i then
-            self.role.offset.x = self.alignment.offset.x
-        else
-            self.role.offset.x = self.alignment.offset.x - self.T.w
-        end
-    end
-    
-    self.role.offset.x = self.role.offset.x or 0
-    self.role.offset.y = self.role.offset.y or 0
-
-    self.T.x = self.role.major.T.x + self.role.offset.x
-    self.T.y = self.role.major.T.y + self.role.offset.y
-
-    self.alignment.prev_offset = self.alignment.prev_offset or {}
-    self.alignment.prev_offset.x, self.alignment.prev_offset.y = self.alignment.offset.x, self.alignment.offset.y
 end
 
-function Moveable:hard_set_T(X, Y, W, H)
-    self.T.x = X
-    self.T.y = Y
-    self.T.w = W
-    self.T.h = H
 
-    self.velocity.x = 0
-    self.velocity.y = 0
-    self.velocity.r = 0
-    self.velocity.scale = 0
+--Draw a bounding rectangle representing the transform of this node. Used in debugging.
+function Node:draw_boundingrect()
+    self.under_overlay = G.under_overlay
 
-    self.VT.x = X
-    self.VT.y = Y
-    self.VT.w = W
-    self.VT.h = H
-    self.VT.r = self.T.r
-    self.VT.scale = self.T.scale
-    self:calculate_parrallax()
-end
-
-function Moveable:hard_set_VT()
-    self.VT.x = self.T.x
-    self.VT.y = self.T.y
-    self.VT.w = self.T.w
-    self.VT.h = self.T.h
-end
-
-function Moveable:drag(offset)
-    if self.states.drag.can or offset then
-        self.ARGS.drag_cursor_trans = self.ARGS.drag_cursor_trans or {}
-        self.ARGS.drag_translation = self.ARGS.drag_translation or {}
-        local _p = self.ARGS.drag_cursor_trans
-        local _t = self.ARGS.drag_translation
-        _p.x = G.CONTROLLER.cursor_position.x/(G.TILESCALE*G.TILESIZE)
-        _p.y = G.CONTROLLER.cursor_position.y/(G.TILESCALE*G.TILESIZE)
-
-        _t.x, _t.y = -self.container.T.w/2, -self.container.T.h/2
-        point_translate(_p, _t)
-
-        point_rotate(_p, self.container.T.r)
-
-        _t.x, _t.y = self.container.T.w/2-self.container.T.x, self.container.T.h/2-self.container.T.y
-        point_translate(_p, _t)
-        
-        if not offset then 
-            offset = self.click_offset
+    if G.DEBUG then
+        local transform = self.VT or self.T
+        love.graphics.push()
+        love.graphics.scale(G.TILESCALE, G.TILESCALE)
+        love.graphics.translate(transform.x*G.TILESIZE+transform.w*G.TILESIZE*0.5,
+                                transform.y*G.TILESIZE+transform.h*G.TILESIZE*0.5)
+        love.graphics.rotate(transform.r)
+        love.graphics.translate(-transform.w*G.TILESIZE*0.5,
+                                -transform.h*G.TILESIZE*0.5)
+        if self.DEBUG_VALUE then
+            love.graphics.setColor(1, 1, 0, 1)
+            love.graphics.print((self.DEBUG_VALUE or ''), transform.w*G.TILESIZE,transform.h*G.TILESIZE, nil, 1/G.TILESCALE)
         end
+        love.graphics.setLineWidth(1 + (self.states.focus.is and 1 or 0))
+        if self.states.collide.is then 
+            love.graphics.setColor(0, 1, 0, 0.3)
+        else
+            love.graphics.setColor(1, 0, 0, 0.3) 
+        end
+        if self.states.focus.can then 
+            love.graphics.setColor(G.C.GOLD) 
+            love.graphics.setLineWidth(1)
+        end
+        if self.CALCING then 
+            love.graphics.setColor({0,0,1,1}) 
+            love.graphics.setLineWidth(3)
+        end
+        love.graphics.rectangle('line', 0, 0, transform.w*G.TILESIZE,transform.h*G.TILESIZE, 3)
+        love.graphics.pop() 
+    end
+end
 
-        self.T.x = _p.x - offset.x
-        self.T.y = _p.y - offset.y
-        self.NEW_ALIGNMENT = true
+--Draws self, then adds self the the draw hash, then draws all children
+function Node:draw()
+    self:draw_boundingrect()
+    if self.states.visible then
+        add_to_drawhash(self)
+        for _, v in pairs(self.children) do
+            v:draw()
+        end
+    end
+end
+
+--Determines if this node collides with some point. Applies any container translations and rotations, then\
+--applies translations and rotations specific to this node. This means the collision detection effectively\
+--determines if some point intersects this node regargless of rotation.
+--
+---@param point {x: number, y: number}
+--**x and y** The coordinates of the cursor transformed into game units
+function Node:collides_with_point(point)
+    --First reset the collision state to false
+    if self.container then
+        local T = self.CT or self.T
+        self.ARGS.collides_with_point_point = self.ARGS.collides_with_point_point or {}
+        self.ARGS.collides_with_point_translation = self.ARGS.collides_with_point_translation or {}
+        self.ARGS.collides_with_point_rotation = self.ARGS.collides_with_point_rotation or {}
+        local _p = self.ARGS.collides_with_point_point
+        local _t = self.ARGS.collides_with_point_translation
+        local _r = self.ARGS.collides_with_point_rotation
+
+        local _b = self.states.hover.is and G.COLLISION_BUFFER or 0
+
+        _p.x, _p.y = point.x, point.y
+
+        if self.container ~= self then --if there is some valid container, we need to apply all translations and rotations for the container first
+            if math.abs(self.container.T.r) < 0.1 then
+                --Translate to normalize this Node to the center of the container
+                _t.x, _t.y = -self.container.T.w/2, -self.container.T.h/2
+                point_translate(_p, _t)
+
+                --Rotate node about the center of the container
+                point_rotate(_p, self.container.T.r)
+                
+                --Translate node to undo the container translation, essentially reframing it in 'container' space
+                _t.x, _t.y = self.container.T.w/2-self.container.T.x, self.container.T.h/2-self.container.T.y
+                point_translate(_p, _t)
+            else
+                --Translate node to undo the container translation, essentially reframing it in 'container' space
+                _t.x, _t.y = -self.container.T.x, -self.container.T.y
+                point_translate(_p, _t)
+            end
+        end
+        if math.abs(T.r) < 0.1 then
+            --If we can essentially disregard transform rotation, just treat it like a normal rectangle
+            if _p.x >= T.x - _b and _p.y >= T.y - _b and _p.x <= T.x + T.w + _b and _p.y <= T.y + T.h + _b then 
+                return true
+            end
+        else
+            --Otherwise we need to do some silly point rotation garbage to determine if the point intersects the rotated rectangle
+            _r.cos, _r.sin = math.cos(T.r+math.pi/2), math.sin(T.r+math.pi/2)
+            _p.x, _p.y = _p.x - (T.x + 0.5*(T.w)), _p.y - (T.y + 0.5*(T.h))
+            _t.x, _t.y = _p.y*_r.cos - _p.x*_r.sin, _p.y*_r.sin + _p.x*_r.cos
+            _p.x, _p.y = _t.x + (T.x + 0.5*(T.w)), _t.y + (T.y + 0.5*(T.h))
+
+            if _p.x >= T.x - _b and _p.y >= T.y - _b
+            and _p.x <= T.x + T.w + _b and _p.y <= T.y + T.h + _b then 
+                return true
+            end
+        end
+    end
+end
+
+--Sets the offset of passed point in terms of this nodes T.x and T.y
+--
+---@param point {x: number, y: number}
+---@param type string
+--**x and y** The coordinates of the cursor transformed into game units
+--**type** the type of offset to set for this Node, either 'Click' or 'Hover'
+function Node:set_offset(point, type)
+    self.ARGS.set_offset_point = self.ARGS.set_offset_point or {}
+    self.ARGS.set_offset_translation = self.ARGS.set_offset_translation or {}
+    local _p = self.ARGS.set_offset_point
+    local _t = self.ARGS.set_offset_translation
+
+    _p.x, _p.y = point.x, point.y
+
+    --Translate to middle of the container
+    _t.x = -self.container.T.w/2
+    _t.y = -self.container.T.h/2
+    point_translate(_p, _t)
+
+    --Rotate about the container midpoint according to node rotation
+    point_rotate(_p, self.container.T.r)
+
+    --Translate node to undo the container translation, essentially reframing it in 'container' space
+    _t.x = self.container.T.w/2-self.container.T.x
+    _t.y = self.container.T.h/2-self.container.T.y
+    point_translate(_p, _t)
+
+    if type == 'Click' then
+        self.click_offset.x = (_p.x - self.T.x)
+        self.click_offset.y = (_p.y - self.T.y)
+    elseif type == 'Hover' then
+        self.hover_offset.x = (_p.x - self.T.x)
+        self.hover_offset.y = (_p.y - self.T.y)
+    end
+end
+
+--If the current container is being 'Dragged', usually by a cursor, determine if any drag popups need to be generated and do so
+function Node:drag()
+    if self.config and self.config.d_popup then
+        if not self.children.d_popup then 
+            self.children.d_popup = UIBox{
+                definition = self.config.d_popup,
+                config = self.config.d_popup_config
+            }
+            self.children.h_popup.states.collide.can = false
+            table.insert(G.I.POPUP, self.children.d_popup)
+            self.children.d_popup.states.drag.can = true
+        end
+    end
+end
+
+--Determines if this Node can be dragged. This is a simple function but more complex objects may redefine this to return a parent\
+--if the parent needs to drag other children with it
+function Node:can_drag()
+    return self.states.drag.can and self or nil
+end
+
+--Called by the CONTROLLER when this node is no longer being dragged, removes any d_popups
+function Node:stop_drag()
+    if self.children.d_popup then
+        for k, v in pairs(G.I.POPUP) do
+            if v == self.children.d_popup then
+                table.remove(G.I.POPUP, k)
+            end
+        end
+        self.children.d_popup:remove()
+        self.children.d_popup = nil
+    end
+end
+
+--If the current container is being 'Hovered', usually by a cursor, determine if any hover popups need to be generated and do so
+function Node:hover() 
+    if self.config and self.config.h_popup then
+        if not self.children.h_popup then 
+            self.config.h_popup_config.instance_type = 'POPUP'
+            self.children.h_popup = UIBox{
+                definition = self.config.h_popup,
+                config = self.config.h_popup_config,
+            }
+            self.children.h_popup.states.collide.can = false
+            self.children.h_popup.states.drag.can = true
+        end
+    end
+end
+
+--Called by the CONTROLLER when this node is no longer being hovered, removes any h_popups
+function Node:stop_hover()
+    if self.children.h_popup then
+        self.children.h_popup:remove()
+        self.children.h_popup = nil
+    end
+end
+
+--Called by the CONTROLLER to determine the position the cursor should be set to for this node
+function Node:put_focused_cursor()
+    return (self.T.x + self.T.w/2 + self.container.T.x)*(G.TILESCALE*G.TILESIZE), (self.T.y + self.T.h/2 + self.container.T.y)*(G.TILESCALE*G.TILESIZE)
+end
+
+--Sets the container of this node and all child nodes to be a new container node
+--
+---@param container Node The new node that will behave as this nodes container
+function Node:set_container(container)
+    if self.children then
+        for _, v in pairs(self.children) do
+            v:set_container(container)
+        end
+    end
+    self.container = container
+end
+
+--Translation function used before any draw calls, translates this node according to the transform of the container node
+function Node:translate_container()
+    if self.container and self.container ~= self then
+        love.graphics.translate(self.container.T.w*G.TILESCALE*G.TILESIZE*0.5, self.container.T.h*G.TILESCALE*G.TILESIZE*0.5)
+        love.graphics.rotate(self.container.T.r)
+        love.graphics.translate(
+            -self.container.T.w*G.TILESCALE*G.TILESIZE*0.5 + self.container.T.x*G.TILESCALE*G.TILESIZE,
+            -self.container.T.h*G.TILESCALE*G.TILESIZE*0.5 + self.container.T.y*G.TILESCALE*G.TILESIZE)
+    end
+end
+
+--When this Node needs to be deleted, removes self from any tables it may have been added to to destroy any weak references\
+--Also calls the remove method of all children to have them do the same
+function Node:remove() 
+
+    for k, v in pairs(G.I.POPUP) do
+        if v == self then
+            table.remove(G.I.POPUP, k)
+            break;
+        end
+    end
+    for k, v in pairs(G.I.NODE) do
+        if v == self then
+            table.remove(G.I.NODE, k)
+            break;
+        end
+    end
+    for k, v in pairs(G.STAGE_OBJECTS[G.STAGE]) do
+        if v == self then
+            table.remove(G.STAGE_OBJECTS[G.STAGE], k)
+            break;
+        end
+    end
+    if self.children then 
         for k, v in pairs(self.children) do
-            v:drag(offset)
-        end
-    end
-    if self.states.drag.can then
-        Node.drag(self)
-    end
-end
-
-function Moveable:juice_up(amount, rot_amt)
-    if G.SETTINGS.reduced_motion then return end
-    local amount = amount or 0.4
-
-    local end_time = G.TIMERS.REAL + 0.4
-    local start_time = G.TIMERS.REAL
-    self.juice = {
-        scale = 0,
-        scale_amt = amount,
-        r = 0,
-        r_amt = ((rot_amt or pseudorandom_element({0.6*amount, -0.6*amount})) or 0),
-        start_time = start_time, 
-        end_time = end_time
-    }
-    self.VT.scale = 1-0.6*amount
-end
-
-function Moveable:move_juice(dt)
-    if self.juice and not self.juice.handled_elsewhere then
-        if self.juice.end_time < G.TIMERS.REAL then
-            self.juice = nil
-        else
-            self.juice.scale =  self.juice.scale_amt*math.sin(50.8*(G.TIMERS.REAL-self.juice.start_time))*math.max(0, ((self.juice.end_time - G.TIMERS.REAL)/(self.juice.end_time - self.juice.start_time))^3)
-            self.juice.r = self.juice.r_amt*math.sin(40.8*(G.TIMERS.REAL-self.juice.start_time))*math.max(0, ((self.juice.end_time - G.TIMERS.REAL)/(self.juice.end_time - self.juice.start_time))^2)
-        end
-    end
-end
-
-function Moveable:move(dt)
-    if self.FRAME.MOVE >= G.FRAMES.MOVE then return end
-    self.FRAME.OLD_MAJOR = self.FRAME.MAJOR
-    self.FRAME.MAJOR = nil
-    self.FRAME.MOVE = G.FRAMES.MOVE
-    if not self.created_on_pause and G.SETTINGS.paused then return end
-
-    --WHY ON EARTH DOES THIS LINE MAKE IT RUN 2X AS FAST???
-    -------------------------------------------------------
-    --local timestart = love.timer.getTime()
-    -------------------------------------------------------
-    
-    self:align_to_major()
-
-    self.CALCING = nil
-    if self.role.role_type == 'Glued' then
-        if self.role.major then self:glue_to_major(self.role.major) end
-    elseif self.role.role_type == 'Minor' and self.role.major then
-        if self.role.major.FRAME.MOVE < G.FRAMES.MOVE then self.role.major:move(dt) end
-        self.STATIONARY = self.role.major.STATIONARY
-        if (not self.STATIONARY) or self.NEW_ALIGNMENT or
-            self.config.refresh_movement or
-            self.juice or
-            self.role.xy_bond == 'Weak' or 
-            self.role.r_bond == 'Weak' then  
-                self.CALCING = true
-                self:move_with_major(dt) 
-        end
-    elseif self.role.role_type == 'Major' then 
-        self.STATIONARY = true
-        self:move_juice(dt)
-        self:move_xy(dt)
-        self:move_r(dt, self.velocity)
-        self:move_scale(dt)
-        self:move_wh(dt)
-        self:calculate_parrallax()
-    end
-    if self.alignment and self.alignment.lr_clamp then
-        self:lr_clamp()
-    end
-
-    self.NEW_ALIGNMENT = false
-end
-
-function Moveable:lr_clamp()
-    if self.T.x < 0 then self.T.x = 0 end
-    if self.VT.x < 0 then self.VT.x = 0 end
-    if (self.T.x + self.T.w) > G.ROOM.T.w then self.T.x = G.ROOM.T.w - self.T.w end
-    if (self.VT.x + self.VT.w) > G.ROOM.T.w  then self.VT.x = G.ROOM.T.w - self.VT.w end
-end
-
-function Moveable:glue_to_major(major_tab)
-    self.T = major_tab.T
-
-    self.VT.x = major_tab.VT.x + (0.5*(1 - major_tab.VT.w/(major_tab.T.w))*self.T.w)
-    self.VT.y = major_tab.VT.y
-    self.VT.w = major_tab.VT.w
-    self.VT.h = major_tab.VT.h
-    self.VT.r = major_tab.VT.r
-    self.VT.scale = major_tab.VT.scale
-
-    self.pinch = major_tab.pinch
-    self.shadow_parrallax = major_tab.shadow_parrallax
-end
-
-MWM = {
-    rotated_offset = {},
-    angles = {},
-    WH = {},
-    offs = {},
-}
-
-function Moveable:move_with_major(dt)
-    if self.role.role_type ~= 'Minor' then return end
-    local major_tab = self.role.major:get_major()
-
-    self:move_juice(dt)
-
-    if self.role.r_bond == 'Weak' then 
-        MWM.rotated_offset.x, MWM.rotated_offset.y = self.role.offset.x + major_tab.offset.x,self.role.offset.y+major_tab.offset.y
-    else
-        if major_tab.major.VT.r < 0.0001 and major_tab.major.VT.r > -0.0001 then 
-            MWM.rotated_offset.x = self.role.offset.x + major_tab.offset.x
-            MWM.rotated_offset.y = self.role.offset.y + major_tab.offset.y
-        else
-            MWM.angles.cos, MWM.angles.sin = math.cos(major_tab.major.VT.r),math.sin(major_tab.major.VT.r)
-            MWM.WH.w, MWM.WH.h = -self.T.w/2 + major_tab.major.T.w/2,-self.T.h/2 + major_tab.major.T.h/2
-            MWM.offs.x, MWM.offs.y = self.role.offset.x + major_tab.offset.x - MWM.WH.w,self.role.offset.y + major_tab.offset.y - MWM.WH.h
-
-            MWM.rotated_offset.x = MWM.offs.x*MWM.angles.cos - MWM.offs.y*MWM.angles.sin + MWM.WH.w
-            MWM.rotated_offset.y = MWM.offs.x*MWM.angles.sin + MWM.offs.y*MWM.angles.cos + MWM.WH.h
-        end
-    end
-
-    self.T.x = major_tab.major.T.x + MWM.rotated_offset.x
-    self.T.y = major_tab.major.T.y + MWM.rotated_offset.y
-
-    if self.role.xy_bond == 'Strong' then
-        self.VT.x = major_tab.major.VT.x + MWM.rotated_offset.x
-        self.VT.y = major_tab.major.VT.y + MWM.rotated_offset.y
-    elseif self.role.xy_bond == 'Weak' then
-        self:move_xy(dt)
-    end
-
-    if self.role.r_bond == 'Strong' then
-        self.VT.r = self.T.r + major_tab.major.VT.r + (self.juice and self.juice.r or 0)
-    elseif self.role.r_bond == 'Weak' then 
-        self:move_r(dt, self.velocity)
-    end
-
-    if self.role.scale_bond == 'Strong' then
-        self.VT.scale = self.T.scale*(major_tab.major.VT.scale/major_tab.major.T.scale) + (self.juice and self.juice.scale or 0)
-    elseif self.role.scale_bond == 'Weak' then 
-        self:move_scale(dt)
-    end
-
-    if self.role.wh_bond == 'Strong' then
-        self.VT.x = self.VT.x + (0.5*(1 - major_tab.major.VT.w/(major_tab.major.T.w))*self.T.w)
-        self.VT.w = (self.T.w)*(major_tab.major.VT.w/major_tab.major.T.w)
-        self.VT.h = (self.T.h)*(major_tab.major.VT.h/major_tab.major.T.h)
-    elseif self.role.wh_bond == 'Weak' then
-        self:move_wh(dt)
-    end
-
-    self:calculate_parrallax()
-end
-
-function Moveable:move_xy(dt)
-    if  (self.T.x ~= self.VT.x or math.abs(self.velocity.x) > 0.01) or 
-        (self.T.y ~= self.VT.y or math.abs(self.velocity.y) > 0.01) then
-        self.velocity.x = G.exp_times.xy*self.velocity.x + (1-G.exp_times.xy)*(self.T.x - self.VT.x)*35*dt
-        self.velocity.y = G.exp_times.xy*self.velocity.y + (1-G.exp_times.xy)*(self.T.y - self.VT.y)*35*dt
-        if self.velocity.x*self.velocity.x + self.velocity.y*self.velocity.y > G.exp_times.max_vel*G.exp_times.max_vel then 
-            local actual_vel = math.sqrt(self.velocity.x*self.velocity.x + self.velocity.y*self.velocity.y)
-            self.velocity.x = G.exp_times.max_vel*self.velocity.x/actual_vel
-            self.velocity.y = G.exp_times.max_vel*self.velocity.y/actual_vel
-        end
-        self.STATIONARY = false
-        self.VT.x = self.VT.x + self.velocity.x
-        self.VT.y = self.VT.y + self.velocity.y
-        if math.abs(self.VT.x - self.T.x) < 0.01 and math.abs(self.velocity.x) < 0.01 then self.VT.x = self.T.x; self.velocity.x = 0 end
-        if math.abs(self.VT.y - self.T.y) < 0.01 and math.abs(self.velocity.y) < 0.01 then self.VT.y = self.T.y; self.velocity.y = 0 end
-    end
-end
-
-function Moveable:move_scale(dt)
-    local des_scale = self.T.scale + (self.zoom and ((self.states.drag.is and 0.1 or 0) + (self.states.hover.is and 0.05 or 0)) or 0) + (self.juice and self.juice.scale or 0)
-
-    if  des_scale ~= self.VT.scale or
-        math.abs(self.velocity.scale) > 0.001 then
-            self.STATIONARY = false
-        self.velocity.scale = G.exp_times.scale*self.velocity.scale + (1-G.exp_times.scale)*(des_scale - self.VT.scale)
-        self.VT.scale = self.VT.scale + self.velocity.scale
-    end
-end
-
-function Moveable:move_wh(dt)
-    if (self.T.w ~= self.VT.w and not self.pinch.x) or 
-        (self.T.h ~= self.VT.h and not self.pinch.y) or 
-        (self.VT.w > 0 and self.pinch.x) or 
-        (self.VT.h > 0 and self.pinch.y) then
-            self.STATIONARY = false
-            self.VT.w = self.VT.w + (8*dt)*(self.pinch.x and -1 or 1)*self.T.w
-            self.VT.h = self.VT.h + (8*dt)*(self.pinch.y and -1 or 1)*self.T.h
-            self.VT.w = math.max(math.min(self.VT.w, self.T.w), 0)
-            self.VT.h = math.max(math.min(self.VT.h, self.T.h), 0)
-    end
-end
-
-function Moveable:move_r(dt, vel)
-    local des_r = self.T.r +0.015*vel.x/dt + (self.juice and self.juice.r*2 or 0) 
-
-    if  des_r ~= self.VT.r or
-        math.abs(self.velocity.r) > 0.001 then
-            self.STATIONARY = false
-        self.velocity.r = G.exp_times.r*self.velocity.r + (1-G.exp_times.r)*(des_r - self.VT.r)
-        self.VT.r = self.VT.r + self.velocity.r 
-    end
-    if math.abs(self.VT.r - self.T.r) < 0.001 and  math.abs(self.velocity.r) < 0.001 then self.VT.r = self.T.r; self.velocity.r = 0 end
-end
-
-function Moveable:calculate_parrallax()
-    if not G.ROOM then return end
-    self.shadow_parrallax.x = (self.T.x + self.T.w/2 - G.ROOM.T.w/2)/(G.ROOM.T.w/2)*1.5
-end
-
-function Moveable:set_role(args)
-    if args.major and not args.major.set_role then return end
-    if args.offset and (type(args.offset)=='table' and not (args.offset.y and args.offset.x)) or type(args.offset) ~= 'table' then
-        args.offset = nil
-    end
-    self.role = {
-        role_type = args.role_type or self.role.role_type,
-        offset = args.offset or self.role.offset,
-        major = args.major or self.role.major,
-        xy_bond = args.xy_bond or self.role.xy_bond,
-        wh_bond = args.wh_bond or self.role.wh_bond,
-        r_bond = args.r_bond or self.role.r_bond,
-        scale_bond = args.scale_bond or self.role.scale_bond,
-        draw_major = args.draw_major or self.role.draw_major,
-    }
-    if self.role.role_type == 'Major' then self.role.major = nil end
-end
-
-function Moveable:get_major()
-    if ( self.role.role_type ~= 'Major' and self.role.major ~= self) and (self.role.xy_bond ~= 'Weak' and self.role.r_bond ~= 'Weak') then
-        --First, does the major already have their offset precalculated for this frame?
-        if not self.FRAME.MAJOR or (G.REFRESH_FRAME_MAJOR_CACHE) then
-            self.FRAME.MAJOR = self.FRAME.MAJOR or EMPTY(self.FRAME.OLD_MAJOR)
-            self.temp_offs = EMPTY(self.temp_offs)
-            local major = self.role.major:get_major()
-            self.FRAME.MAJOR.major = major.major
-            self.FRAME.MAJOR.offset = self.FRAME.MAJOR.offset or self.temp_offs
-            self.FRAME.MAJOR.offset.x, self.FRAME.MAJOR.offset.y = major.offset.x + self.role.offset.x + self.layered_parallax.x, major.offset.y + self.role.offset.y + self.layered_parallax.y
+            v:remove()
         end 
-        return self.FRAME.MAJOR
-    else
-        self.ARGS.get_major = self.ARGS.get_major or {}
-        self.ARGS.get_major.major = self
-        self.ARGS.get_major.offset = self.ARGS.get_major.offset or {}
-        self.ARGS.get_major.offset.x, self.ARGS.get_major.offset.y = 0,0
-        return self.ARGS.get_major
     end
+    if G.CONTROLLER.clicked.target ==self then 
+        G.CONTROLLER.clicked.target = nil
+    end
+    if G.CONTROLLER.focused.target ==self then 
+        G.CONTROLLER.focused.target = nil
+    end
+    if G.CONTROLLER.dragging.target ==self then 
+        G.CONTROLLER.dragging.target = nil
+    end
+    if G.CONTROLLER.hovering.target ==self then 
+        G.CONTROLLER.hovering.target = nil
+    end
+    if G.CONTROLLER.released_on.target ==self then 
+        G.CONTROLLER.released_on.target = nil
+    end
+    if G.CONTROLLER.cursor_down.target ==self then 
+        G.CONTROLLER.cursor_down.target = nil
+    end
+    if G.CONTROLLER.cursor_up.target ==self then 
+        G.CONTROLLER.cursor_up.target = nil
+    end
+    if G.CONTROLLER.cursor_hover.target ==self then 
+        G.CONTROLLER.cursor_hover.target = nil
+    end
+    
+    self.REMOVED = true
 end
 
-function Moveable:remove()
-    for k, v in pairs(G.MOVEABLES) do
-        if v == self then
-            table.remove(G.MOVEABLES, k)
-            break;
-        end
-    end
-    for k, v in pairs(G.I.MOVEABLE) do
-        if v == self then
-            table.remove(G.I.MOVEABLE, k)
-            break;
-        end
-    end
-    Node.remove(self)
+--returns the squared(fast) distance in game units from the center of this node to the center of another node
+--
+---@param other_node Node to measure the distance from
+function Node:fast_mid_dist(other_node)
+    return math.sqrt((other_node.T.x + 0.5*other_node.T.w) - (self.T.x + self.T.w))^2 + ((other_node.T.y + 0.5*other_node.T.h) - (self.T.y + self.T.h))^2
 end
+
+--Prototype for a click release function, when the cursor is released on this node
+function Node:release(dragged) end
+
+--Prototype for a click function
+function Node:click() end
+
+--Prototype animation function for any frame manipulation needed 
+function Node:animate() end
+
+--Prototype update function for any object specific logic that needs to occur every frame
+function Node:update(dt) end
