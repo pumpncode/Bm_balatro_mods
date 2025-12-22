@@ -814,18 +814,7 @@ function UIElement:draw_self()
             love.graphics.pop()
         end
     end
-    if self.config.pulse_border then
-        self.border_pulse_timer = self.border_pulse_timer or G.TIMERS.REAL
-        local lw = 2*math.max(0, 0.5*math.cos(6*(G.TIMERS.REAL - self.border_pulse_timer)) + 0.5)
-        prep_draw(self, 1)
-        love.graphics.scale((1)/(G.TILESIZE))
-        love.graphics.setLineWidth(lw + 1)
-        love.graphics.setColor(adjust_alpha(G.C.BLACK, 0.2*lw, true))
-        self:draw_pixellated_rect('fill', parallax_dist)
-        love.graphics.setColor(self.config.colour[4] > 0 and mix_colours(G.C.WHITE, self.config.colour, 0.8) or G.C.WHITE)
-        self:draw_pixellated_rect('line', parallax_dist)
-        love.graphics.pop()
-    end
+
     --Draw the outline for highlighted buttons
     if self.states.focus.is then 
         self.focus_timer = self.focus_timer or G.TIMERS.REAL
@@ -1054,9 +1043,6 @@ function UIElement:stop_hover()
 end
 
 function UIElement:release(other)
-    if self.config.release_func then 
-        self.config.release_func(other)
-    end
     if self.parent then self.parent:release(other) end
 end
 
