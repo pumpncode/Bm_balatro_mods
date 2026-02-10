@@ -404,7 +404,9 @@ G.FUNCS.discard_cards_from_highlighted = function(e, hook)
                 eval = G.jokers.cards[j]:calculate_joker({discard = true, other_card =  G.hand.highlighted[i], full_hand = G.hand.highlighted})
                 if eval then
                     if eval.remove then removed = true end
-                    card_eval_status_text(G.jokers.cards[j], 'jokers', nil, 1, nil, eval)
+                    if not eval.no_message then
+                        card_eval_status_text(G.jokers.cards[j], 'jokers', nil, 1, nil, eval)
+                    end
                 end
             end
             table.insert(cards, G.hand.highlighted[i])
@@ -608,8 +610,10 @@ G.FUNCS.evaluate_play = function(e)
     local percent_delta = 0.08
 
     if G.GAME.current_round.current_hand.handname ~= disp_text then delay(0.3) end
-    update_hand_text({sound = G.GAME.current_round.current_hand.handname ~= disp_text and 'button' or nil, volume = 0.4, immediate = true, nopulse = nil,
-                delay = G.GAME.current_round.current_hand.handname ~= disp_text and 0.4 or 0}, {handname=disp_text, level=G.GAME.hands[text].level, mult = G.GAME.hands[text].mult, chips = G.GAME.hands[text].chips})
+    if not G.SETTINGS.reduce_animation then
+        update_hand_text({sound = G.GAME.current_round.current_hand.handname ~= disp_text and 'button' or nil, volume = 0.4, immediate = true, nopulse = nil,
+            delay = G.GAME.current_round.current_hand.handname ~= disp_text and 0.4 or 0}, {handname=disp_text, level=G.GAME.hands[text].level, mult = G.GAME.hands[text].mult, chips = G.GAME.hands[text].chips})
+    end
 
     if not G.GAME.blind:debuff_hand(G.play.cards, poker_hands, text) then
         mult = mod_mult(G.GAME.hands[text].mult)
@@ -629,7 +633,9 @@ G.FUNCS.evaluate_play = function(e)
             --calculate the joker effects
             local effects = eval_card(G.jokers.cards[i], {cardarea = G.jokers, full_hand = G.play.cards, scoring_hand = scoring_hand, scoring_name = text, poker_hands = poker_hands, before = true})
             if effects.jokers then
-                card_eval_status_text(G.jokers.cards[i], 'jokers', nil, percent, nil, effects.jokers)
+                if not G.SETTINGS.reduce_animation then
+                    card_eval_status_text(G.jokers.cards[i], 'jokers', nil, percent, nil, effects.jokers)
+                end
                 percent = percent + percent_delta
                 if effects.jokers.level_up then
                     level_up_hand(G.jokers.cards[i], text)
@@ -660,7 +666,9 @@ G.FUNCS.evaluate_play = function(e)
                         G.HUD_blind:get_UIE_by_ID('HUD_blind_debuff_2'):juice_up(0.3, 0)
                         G.GAME.blind:juice_up();return true end)
                 }))
-                card_eval_status_text(scoring_hand[i], 'debuff')
+                if not G.SETTINGS.reduce_animation then
+                    card_eval_status_text(scoring_hand[i], 'debuff')
+                end
             else
                 --Check for play doubling
                 local reps = {1}
@@ -685,7 +693,9 @@ G.FUNCS.evaluate_play = function(e)
                 for j=1,#reps do
                     percent = percent + percent_delta
                     if reps[j] ~= 1 then
-                        card_eval_status_text((reps[j].jokers or reps[j].seals).card, 'jokers', nil, nil, nil, (reps[j].jokers or reps[j].seals))
+                        if not G.SETTINGS.reduce_animation then
+                            card_eval_status_text((reps[j].jokers or reps[j].seals).card, 'jokers', nil, nil, nil, (reps[j].jokers or reps[j].seals))
+                        end
                     end
                     
                     --calculate the hand effects
@@ -702,37 +712,44 @@ G.FUNCS.evaluate_play = function(e)
                     for ii = 1, #effects do
                         --If chips added, do chip add event and add the chips to the total
                         if effects[ii].chips then 
-                            if effects[ii].card then juice_card(effects[ii].card) end
                             hand_chips = mod_chips(hand_chips + effects[ii].chips)
-                            update_hand_text({delay = 0}, {chips = hand_chips})
-                            card_eval_status_text(scoring_hand[i], 'chips', effects[ii].chips, percent)
+                            if not G.SETTINGS.reduce_animation then
+                                if effects[ii].card then juice_card(effects[ii].card) end
+                                update_hand_text({delay = 0}, {chips = hand_chips})
+                                card_eval_status_text(scoring_hand[i], 'chips', effects[ii].chips, percent)
+                            end
                         end
 
                         --If mult added, do mult add event and add the mult to the total
                         if effects[ii].mult then 
-                            if effects[ii].card then juice_card(effects[ii].card) end
                             mult = mod_mult(mult + effects[ii].mult)
-                            update_hand_text({delay = 0}, {mult = mult})
-                            card_eval_status_text(scoring_hand[i], 'mult', effects[ii].mult, percent)
+                            if not G.SETTINGS.reduce_animation then
+                                if effects[ii].card then juice_card(effects[ii].card) end
+                                update_hand_text({delay = 0}, {mult = mult})
+                                card_eval_status_text(scoring_hand[i], 'mult', effects[ii].mult, percent)
+                            end
                         end
 
                         --If play dollars added, add dollars to total
                         if effects[ii].p_dollars then 
-                            if effects[ii].card then juice_card(effects[ii].card) end
                             ease_dollars(effects[ii].p_dollars)
-                            card_eval_status_text(scoring_hand[i], 'dollars', effects[ii].p_dollars, percent)
+                            if not G.SETTINGS.reduce_animation then
+                                if effects[ii].card then juice_card(effects[ii].card) end
+                                card_eval_status_text(scoring_hand[i], 'dollars', effects[ii].p_dollars, percent)
+                            end
                         end
 
                         --If dollars added, add dollars to total
                         if effects[ii].dollars then 
-                            if effects[ii].card then juice_card(effects[ii].card) end
                             ease_dollars(effects[ii].dollars)
-                            card_eval_status_text(scoring_hand[i], 'dollars', effects[ii].dollars, percent)
+                            if not G.SETTINGS.reduce_animation then
+                                if effects[ii].card then juice_card(effects[ii].card) end
+                                card_eval_status_text(scoring_hand[i], 'dollars', effects[ii].dollars, percent)
+                            end
                         end
 
                         --Any extra effects
                         if effects[ii].extra then 
-                            if effects[ii].card then juice_card(effects[ii].card) end
                             local extras = {mult = false, hand_chips = false}
                             if effects[ii].extra.mult_mod then mult =mod_mult( mult + effects[ii].extra.mult_mod);extras.mult = true end
                             if effects[ii].extra.chip_mod then hand_chips = mod_chips(hand_chips + effects[ii].extra.chip_mod);extras.hand_chips = true end
@@ -743,16 +760,21 @@ G.FUNCS.evaluate_play = function(e)
                                 extras.hand_chips = true; extras.mult = true
                             end
                             if effects[ii].extra.func then effects[ii].extra.func() end
-                            update_hand_text({delay = 0}, {chips = extras.hand_chips and hand_chips, mult = extras.mult and mult})
-                            card_eval_status_text(scoring_hand[i], 'extra', nil, percent, nil, effects[ii].extra)
+                            if not G.SETTINGS.reduce_animation then
+                                if effects[ii].card then juice_card(effects[ii].card) end
+                                update_hand_text({delay = 0}, {chips = extras.hand_chips and hand_chips, mult = extras.mult and mult})
+                                card_eval_status_text(scoring_hand[i], 'extra', nil, percent, nil, effects[ii].extra)
+                            end
                         end
 
                         --If x_mult added, do mult add event and mult the mult to the total
                         if effects[ii].x_mult then 
-                            if effects[ii].card then juice_card(effects[ii].card) end
                             mult = mod_mult(mult*effects[ii].x_mult)
-                            update_hand_text({delay = 0}, {mult = mult})
-                            card_eval_status_text(scoring_hand[i], 'x_mult', effects[ii].x_mult, percent)
+                            if not G.SETTINGS.reduce_animation then
+                                if effects[ii].card then juice_card(effects[ii].card) end
+                                update_hand_text({delay = 0}, {mult = mult})
+                                card_eval_status_text(scoring_hand[i], 'x_mult', effects[ii].x_mult, percent)
+                            end
                         end
 
                         --calculate the card edition effects
@@ -760,19 +782,21 @@ G.FUNCS.evaluate_play = function(e)
                             hand_chips = mod_chips(hand_chips + (effects[ii].edition.chip_mod or 0))
                             mult = mult + (effects[ii].edition.mult_mod or 0)
                             mult = mod_mult(mult*(effects[ii].edition.x_mult_mod or 1))
-                            update_hand_text({delay = 0}, {
-                                chips = effects[ii].edition.chip_mod and hand_chips or nil,
-                                mult = (effects[ii].edition.mult_mod or effects[ii].edition.x_mult_mod) and mult or nil,
-                            })
-                            card_eval_status_text(scoring_hand[i], 'extra', nil, percent, nil, {
-                                message = (effects[ii].edition.chip_mod and localize{type='variable',key='a_chips',vars={effects[ii].edition.chip_mod}}) or
+                            if not G.SETTINGS.reduce_animation then
+                                update_hand_text({delay = 0}, {
+                                    chips = effects[ii].edition.chip_mod and hand_chips or nil,
+                                    mult = (effects[ii].edition.mult_mod or effects[ii].edition.x_mult_mod) and mult or nil,
+                                })
+                                card_eval_status_text(scoring_hand[i], 'extra', nil, percent, nil, {
+                                    message = (effects[ii].edition.chip_mod and localize{type='variable',key='a_chips',vars={effects[ii].edition.chip_mod}}) or
                                         (effects[ii].edition.mult_mod and localize{type='variable',key='a_mult',vars={effects[ii].edition.mult_mod}}) or
                                         (effects[ii].edition.x_mult_mod and localize{type='variable',key='a_xmult',vars={effects[ii].edition.x_mult_mod}}),
-                                chip_mod =  effects[ii].edition.chip_mod,
-                                mult_mod =  effects[ii].edition.mult_mod,
-                                x_mult_mod =  effects[ii].edition.x_mult_mod,
-                                colour = G.C.DARK_EDITION,
+                                    chip_mod =  effects[ii].edition.chip_mod,
+                                    mult_mod =  effects[ii].edition.mult_mod,
+                                    x_mult_mod =  effects[ii].edition.x_mult_mod,
+                                    colour = G.C.DARK_EDITION,
                                 edition = true})
+                            end
                         end
                     end
                 end
@@ -790,7 +814,9 @@ G.FUNCS.evaluate_play = function(e)
                 local j = 1
                 while j <= #reps do
                     if reps[j] ~= 1 then
-                        card_eval_status_text((reps[j].jokers or reps[j].seals).card, 'jokers', nil, nil, nil, (reps[j].jokers or reps[j].seals))
+                        if not G.SETTINGS.reduce_animation then
+                            card_eval_status_text((reps[j].jokers or reps[j].seals).card, 'jokers', nil, nil, nil, (reps[j].jokers or reps[j].seals))
+                        end
                         percent = percent + percent_delta
                     end
 
@@ -833,10 +859,12 @@ G.FUNCS.evaluate_play = function(e)
                         --if this effect came from a joker
                         if effects[ii].card then
                             mod_percent = true
-                            G.E_MANAGER:add_event(Event({
-                                trigger = 'immediate',
-                                func = (function() effects[ii].card:juice_up(0.7);return true end)
-                            }))
+                            if not G.SETTINGS.reduce_animation then
+                                G.E_MANAGER:add_event(Event({
+                                    trigger = 'immediate',
+                                    func = (function() effects[ii].card:juice_up(0.7);return true end)
+                                }))
+                            end
                         end
                         
                         --If hold mult added, do hold mult add event and add the mult to the total
@@ -844,27 +872,35 @@ G.FUNCS.evaluate_play = function(e)
                         --If dollars added, add dollars to total
                         if effects[ii].dollars then 
                             ease_dollars(effects[ii].dollars)
-                            card_eval_status_text(G.hand.cards[i], 'dollars', effects[ii].dollars, percent)
+                            if not G.SETTINGS.reduce_animation then
+                                card_eval_status_text(G.hand.cards[i], 'dollars', effects[ii].dollars, percent)
+                            end
                         end
 
                         if effects[ii].h_mult then
                             mod_percent = true
                             mult = mod_mult(mult + effects[ii].h_mult)
-                            update_hand_text({delay = 0}, {mult = mult})
-                            card_eval_status_text(G.hand.cards[i], 'h_mult', effects[ii].h_mult, percent)
+                            if not G.SETTINGS.reduce_animation then
+                                update_hand_text({delay = 0}, {mult = mult})
+                                card_eval_status_text(G.hand.cards[i], 'h_mult', effects[ii].h_mult, percent)
+                            end
                         end
 
                         if effects[ii].x_mult then
                             mod_percent = true
                             mult = mod_mult(mult*effects[ii].x_mult)
-                            update_hand_text({delay = 0}, {mult = mult})
-                            card_eval_status_text(G.hand.cards[i], 'x_mult', effects[ii].x_mult, percent)
+                            if not G.SETTINGS.reduce_animation then
+                                update_hand_text({delay = 0}, {mult = mult})
+                                card_eval_status_text(G.hand.cards[i], 'x_mult', effects[ii].x_mult, percent)
+                            end
                         end
 
                         if effects[ii].message then
                             mod_percent = true
-                            update_hand_text({delay = 0}, {mult = mult})
-                            card_eval_status_text(G.hand.cards[i], 'extra', nil, percent, nil, effects[ii])
+                            if not G.SETTINGS.reduce_animation then
+                                update_hand_text({delay = 0}, {mult = mult})
+                                card_eval_status_text(G.hand.cards[i], 'extra', nil, percent, nil, effects[ii])
+                            end
                         end
                     end
                     j = j +1
@@ -882,21 +918,25 @@ G.FUNCS.evaluate_play = function(e)
                 edition_effects.jokers.edition = true
                 if edition_effects.jokers.chip_mod then
                     hand_chips = mod_chips(hand_chips + edition_effects.jokers.chip_mod)
-                    update_hand_text({delay = 0}, {chips = hand_chips})
-                    card_eval_status_text(_card, 'jokers', nil, percent, nil, {
-                        message = localize{type='variable',key='a_chips',vars={edition_effects.jokers.chip_mod}},
-                        chip_mod =  edition_effects.jokers.chip_mod,
-                        colour =  G.C.EDITION,
+                    if not G.SETTINGS.reduce_animation then
+                        update_hand_text({delay = 0}, {chips = hand_chips})
+                        card_eval_status_text(_card, 'jokers', nil, percent, nil, {
+                            message = localize{type='variable',key='a_chips',vars={edition_effects.jokers.chip_mod}},
+                            chip_mod =  edition_effects.jokers.chip_mod,
+                            colour =  G.C.EDITION,
                         edition = true})
+                    end
                 end
                 if edition_effects.jokers.mult_mod then
                     mult = mod_mult(mult + edition_effects.jokers.mult_mod)
-                    update_hand_text({delay = 0}, {mult = mult})
-                    card_eval_status_text(_card, 'jokers', nil, percent, nil, {
-                        message = localize{type='variable',key='a_mult',vars={edition_effects.jokers.mult_mod}},
-                        mult_mod =  edition_effects.jokers.mult_mod,
-                        colour = G.C.DARK_EDITION,
+                    if not G.SETTINGS.reduce_animation then
+                        update_hand_text({delay = 0}, {mult = mult})
+                        card_eval_status_text(_card, 'jokers', nil, percent, nil, {
+                            message = localize{type='variable',key='a_mult',vars={edition_effects.jokers.mult_mod}},
+                            mult_mod =  edition_effects.jokers.mult_mod,
+                            colour = G.C.DARK_EDITION,
                         edition = true})
+                    end
                 end
                 percent = percent+percent_delta
             end
@@ -910,8 +950,10 @@ G.FUNCS.evaluate_play = function(e)
                 if effects.jokers.mult_mod then mult = mod_mult(mult + effects.jokers.mult_mod);extras.mult = true end
                 if effects.jokers.chip_mod then hand_chips = mod_chips(hand_chips + effects.jokers.chip_mod);extras.hand_chips = true end
                 if effects.jokers.Xmult_mod then mult = mod_mult(mult*effects.jokers.Xmult_mod);extras.mult = true  end
-                update_hand_text({delay = 0}, {chips = extras.hand_chips and hand_chips, mult = extras.mult and mult})
-                card_eval_status_text(_card, 'jokers', nil, percent, nil, effects.jokers)
+                if not G.SETTINGS.reduce_animation then
+                    update_hand_text({delay = 0}, {chips = extras.hand_chips and hand_chips, mult = extras.mult and mult})
+                    card_eval_status_text(_card, 'jokers', nil, percent, nil, effects.jokers)
+                end
                 percent = percent+percent_delta
             end
 
@@ -923,8 +965,10 @@ G.FUNCS.evaluate_play = function(e)
                     if effect.mult_mod then mult = mod_mult(mult + effect.mult_mod);extras.mult = true end
                     if effect.chip_mod then hand_chips = mod_chips(hand_chips + effect.chip_mod);extras.hand_chips = true end
                     if effect.Xmult_mod then mult = mod_mult(mult*effect.Xmult_mod);extras.mult = true  end
-                    if extras.mult or extras.hand_chips then update_hand_text({delay = 0}, {chips = extras.hand_chips and hand_chips, mult = extras.mult and mult}) end
-                    if extras.mult or extras.hand_chips then card_eval_status_text(v, 'jokers', nil, percent, nil, effect) end
+                    if not G.SETTINGS.reduce_animation then
+                        if extras.mult or extras.hand_chips then update_hand_text({delay = 0}, {chips = extras.hand_chips and hand_chips, mult = extras.mult and mult}) end
+                        if extras.mult or extras.hand_chips then card_eval_status_text(v, 'jokers', nil, percent, nil, effect) end
+                    end
                     percent = percent+percent_delta
                 end
             end
@@ -932,12 +976,14 @@ G.FUNCS.evaluate_play = function(e)
             if edition_effects.jokers then
                 if edition_effects.jokers.x_mult_mod then
                     mult = mod_mult(mult*edition_effects.jokers.x_mult_mod)
-                    update_hand_text({delay = 0}, {mult = mult})
-                    card_eval_status_text(_card, 'jokers', nil, percent, nil, {
-                        message = localize{type='variable',key='a_xmult',vars={edition_effects.jokers.x_mult_mod}},
-                        x_mult_mod =  edition_effects.jokers.x_mult_mod,
-                        colour =  G.C.EDITION,
+                    if not G.SETTINGS.reduce_animation then
+                        update_hand_text({delay = 0}, {mult = mult})
+                        card_eval_status_text(_card, 'jokers', nil, percent, nil, {
+                            message = localize{type='variable',key='a_xmult',vars={edition_effects.jokers.x_mult_mod}},
+                            x_mult_mod =  edition_effects.jokers.x_mult_mod,
+                            colour =  G.C.EDITION,
                         edition = true})
+                    end
                 end
                 percent = percent+percent_delta
             end
@@ -1021,7 +1067,9 @@ G.FUNCS.evaluate_play = function(e)
 
             --Any Joker effects
             if effects.jokers then
-                card_eval_status_text(G.jokers.cards[i], 'jokers', nil, percent, nil, effects.jokers)
+                if not G.SETTINGS.reduce_animation then
+                    card_eval_status_text(G.jokers.cards[i], 'jokers', nil, percent, nil, effects.jokers)
+                end
                 percent = percent+percent_delta
             end
         end
@@ -1030,10 +1078,12 @@ G.FUNCS.evaluate_play = function(e)
         trigger = 'after',delay = 0.4,
         func = (function()  update_hand_text({delay = 0, immediate = true}, {mult = 0, chips = 0, chip_total = math.floor(hand_chips*mult), level = '', handname = ''});play_sound('button', 0.9, 0.6);return true end)
       }))
+      record_history_hands({handname = text, disp_handname = non_loc_disp_text, chips = hand_chips, mult = mult, scoring_hand = scoring_hand})
+      
       check_and_set_high_score('hand', hand_chips*mult)
 
       check_for_unlock({type = 'chip_score', chips = math.floor(hand_chips*mult)})
-   
+    
     if hand_chips*mult > 0 then 
         delay(0.8)
         G.E_MANAGER:add_event(Event({
@@ -1133,6 +1183,7 @@ G.FUNCS.evaluate_play = function(e)
 end
 
 G.FUNCS.evaluate_round = function()
+    G.GAME.total_cashout_rows = 0
     local pitch = 0.95
     local dollars = 0
 
@@ -1203,6 +1254,21 @@ G.FUNCS.evaluate_round = function()
     end
 
     pitch = pitch + 0.06
+
+    if G.GAME.total_cashout_rows > 7 then
+        local total_hidden = G.GAME.total_cashout_rows - 7
+        G.E_MANAGER:add_event(Event({trigger = 'before', delay = 0.38, func = function()
+            local hidden = {n=G.UIT.R, config={align = "cm"}, nodes={
+                {n=G.UIT.O, config={object = DynaText({
+                    string = {number_format(total_hidden)}, 
+                    colours = {G.C.WHITE}, shadow = true, float = false, 
+                    scale = 0.45,
+                    font = G.LANGUAGES['en-us'].font, pop_in = 0
+                })}}
+            }}
+            G.round_eval:add_child(hidden, G.round_eval:get_UIE_by_ID('bonus_round_eval'))
+        return true end}))
+    end
 
     add_round_eval_row({name = 'bottom', dollars = dollars})
 end
