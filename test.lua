@@ -34,6 +34,14 @@ end
 ---@param e {}
 --**e** Is the UIE that called this function
 G.FUNCS.sort_hand_suit = function(e)
+    if G.SETTINGS.flip_sort then
+        for k, v in ipairs(G.hand.cards) do
+            if v.facing == 'back' then v:flip() end
+        end
+        for k, v in ipairs(G.jokers.cards) do
+            if v.facing == 'back' then v:flip() end
+        end
+    end
     G.hand:sort('suit desc')
     play_sound('paper1')
 end
@@ -43,6 +51,14 @@ end
 ---@param e {}
 --**e** Is the UIE that called this function
 G.FUNCS.sort_hand_value = function(e)
+    if G.SETTINGS.flip_sort then
+        for k, v in ipairs(G.hand.cards) do
+            if v.facing == 'back' then v:flip() end
+        end
+        for k, v in ipairs(G.jokers.cards) do
+            if v.facing == 'back' then v:flip() end
+        end
+    end
     G.hand:sort('desc')
     play_sound('paper1')
 end
@@ -803,7 +819,7 @@ G.FUNCS.change_window_cycle_UI = function()
       swap_node.children[1]:remove()
       swap_node.children[1] = nil
       swap_node.UIBox:add_child(
-        create_option_cycle({w = 4,scale = 0.8, options = G.SETTINGS.WINDOW.DISPLAYS[focused_display].screen_resolutions.strings, opt_callback = 'change_screen_resolution',current_option = res_option or 1}),
+        create_option_cycle({font = G.LANGUAGES['en-us'].font, w = 4,scale = 0.8, options = G.SETTINGS.WINDOW.DISPLAYS[focused_display].screen_resolutions.strings, opt_callback = 'change_screen_resolution',current_option = res_option or 1}),
         swap_node)
     end
   end
@@ -863,6 +879,11 @@ end
 G.FUNCS.change_crt_bloom = function(args)
   G.SETTINGS.GRAPHICS.bloom = args.to_key
   G:save_settings()
+end
+
+G.FUNCS.change_operation_mode = function(args)
+    G.SETTINGS.GRAPHICS.operation_mode = args.to_key
+    G:save_settings()
 end
 
 G.FUNCS.change_collab = function(args)
@@ -1177,7 +1198,7 @@ G.FUNCS.apply_window_changes = function(_initial)
     {fullscreen = G.SETTINGS.WINDOW.screenmode ~= 'Windowed',
     fullscreentype = (G.SETTINGS.WINDOW.screenmode == 'Borderless' and 'desktop') or (G.SETTINGS.WINDOW.screenmode == 'Fullscreen' and 'exclusive') or nil,
     vsync = G.SETTINGS.WINDOW.vsync,
-    resizable = true,
+    resizable = not (love.system.getOS() == 'iOS' or love.system.getOS() == 'Android'),
     display = G.SETTINGS.WINDOW.selected_display,
     highdpi = (love.system.getOS() == 'OS X')
     })
@@ -1258,21 +1279,6 @@ G.FUNCS.RUN_SETUP_check_stake2 = function(e)
       config = {offset = {x=0,y=0}, align = 'cm', parent = e}
     }
     e.config.id = G.viewed_stake
-  end
-end
-
-G.FUNCS.change_viewed_collab = function(args)
-  G.viewed_collab = args.to_val
-end
-
-G.FUNCS.CREDITS_check_collab = function(e)
-  if (G.viewed_collab ~= e.config.id) then 
-    e.config.object:remove() 
-    e.config.object = UIBox{
-      definition =  G.UIDEF.viewed_collab_option(),
-      config = {offset = {x=0,y=0}, align = 'cm', parent = e}
-    }
-    e.config.id = G.viewed_collab
   end
 end
 
@@ -1553,6 +1559,20 @@ G.FUNCS.high_scores = function(e)
   }
 end
 
+G.FUNCS.achievement_list = function(e)
+    G.SETTINGS.paused = true
+    G.FUNCS.overlay_menu{
+        definition = G.UIDEF.achievement_list(),
+    }
+end
+
+G.FUNCS.quick_load = function(e)
+    G:delete_run()
+    G.SAVED_GAME = get_compressed(G.SETTINGS.profile..'/'..'save.jkr')
+    if G.SAVED_GAME ~= nil then G.SAVED_GAME = STR_UNPACK(G.SAVED_GAME) end
+    G:start_run({savetext = G.SAVED_GAME})
+end
+
 G.FUNCS.customize_deck = function(e)
   G.SETTINGS.paused = true
   G.FUNCS.overlay_menu{
@@ -1611,6 +1631,42 @@ G.FUNCS.notify_then_setup_run = function(e)
       end
     end)
   }))
+end
+
+G.FUNCS.change_achievement_description = function(e)
+  if G.OVERLAY_MENU then
+    local desc_area = G.OVERLAY_MENU:get_UIE_by_ID('achievement_area')
+    if desc_area and desc_area.config.oid ~= e.config.id then
+      if desc_area.config.old_chosen then desc_area.config.old_chosen.config.chosen = nil end
+      e.config.chosen = 'vert'
+      if desc_area.config.object then 
+        desc_area.config.object:remove() 
+      end
+      desc_area.config.object = UIBox{
+        definition =  G.UIDEF.achievement_description(e.config.id),
+        config = {offset = {x=0,y=0}, align = 'cm', parent = desc_area}
+      }
+      desc_area.config.oid = e.config.id 
+      desc_area.config.old_chosen = e
+    end
+  end
+end
+
+G.FUNCS.change_achievement_list_page = function(args)
+  if not args or not args.cycle_config then return end
+  if G.OVERLAY_MENU then
+    local ac_list = G.OVERLAY_MENU:get_UIE_by_ID('achievement_list')
+    if ac_list then
+      if ac_list.config.object then
+        ac_list.config.object:remove()
+      end
+      ac_list.config.object = UIBox{
+        definition =  G.UIDEF.achievement_list_page(args.cycle_config.current_option-1),
+        config = {offset = {x=0,y=0}, align = 'cm', parent = ac_list}
+      }
+      G.FUNCS.change_achievement_description{config = {id = 'nil'}}
+    end
+  end
 end
 
 G.FUNCS.change_challenge_description = function(e)
@@ -1907,9 +1963,9 @@ function scale_number(number, scale, max)
   if not number or type(number) ~= 'number' then return scale end
   if not max then max = 10000 end
   if number >= G.E_SWITCH_POINT then
-    scale = scale*math.floor(math.log(max*10, 10))/math.floor(math.log(1000000*10, 10))
+    scale = scale*math.floor(math.log10(max*10))/math.floor(math.log10(1000000*10))
   elseif number >= max then
-    scale = scale*math.floor(math.log(max*10, 10))/math.floor(math.log(number*10, 10))
+    scale = scale*math.floor(math.log10(max*10))/math.floor(math.log10(number*10))
   end
   return scale
 end
@@ -2019,7 +2075,7 @@ G.FUNCS.flame_handler = function(e)
       local exptime = math.exp(-0.4*G.real_dt)
       
       if G.ARGS.score_intensity.earned_score >= G.ARGS.score_intensity.required_score and G.ARGS.score_intensity.required_score > 0 then
-        _F.intensity = ((G.pack_cards and not G.pack_cards.REMOVED) or (G.TAROT_INTERRUPT)) and 0 or math.max(0., math.log(G.ARGS.score_intensity.earned_score, 5)-2)
+        _F.intensity = ((G.pack_cards and not G.pack_cards.REMOVED) or (G.TAROT_INTERRUPT)) and 0 or math.max(0., math.log(G.ARGS.score_intensity.earned_score)/math.log(5)-2)
       else
         _F.intensity = 0
       end
@@ -2129,9 +2185,38 @@ end
     end
   end
 
+  G.FUNCS.can_buy_pack = function(e)
+    if (e.config.ref_table.cost > G.GAME.dollars - G.GAME.bankrupt_at) and (e.config.ref_table.cost > 0) then 
+      e.config.colour = G.C.UI.BACKGROUND_INACTIVE
+      e.config.button = nil
+    else
+      e.config.colour = G.C.ORANGE
+      e.config.button = 'use_card'
+    end
+  end
+
+  G.FUNCS.can_reroll_celestial = function(e)
+    if not G.pack_cards or (G.GAME.STOP_USE and G.GAME.STOP_USE > 0) or G.GAME.reroll_celestial_press or (G.GAME.reroll_celestial_cost > G.GAME.dollars - G.GAME.bankrupt_at and G.GAME.reroll_celestial_cost > 0) then
+        e.config.colour = G.C.UI.BACKGROUND_INACTIVE
+        e.config.button = nil
+    else
+        e.config.colour = G.C.GREEN
+        e.config.button = 'reroll_celestial'
+    end
+  end
+  
+  G.FUNCS.can_reroll_buffoon = function(e)
+    if not G.pack_cards or (G.GAME.STOP_USE and G.GAME.STOP_USE > 0) or G.GAME.reroll_buffoon_press or (G.GAME.reroll_buffoon_cost > G.GAME.dollars - G.GAME.bankrupt_at and G.GAME.reroll_buffoon_cost > 0) then
+        e.config.colour = G.C.UI.BACKGROUND_INACTIVE
+        e.config.button = nil
+    else
+        e.config.colour = G.C.GREEN
+        e.config.button = 'reroll_buffoon'
+    end
+  end
+
   G.FUNCS.can_skip_booster = function(e)
-    if G.pack_cards and (G.pack_cards.cards[1]) and 
-    (G.STATE == G.STATES.PLANET_PACK or G.STATE == G.STATES.STANDARD_PACK or G.STATE == G.STATES.BUFFOON_PACK or (G.hand and (G.hand.cards[1] or (G.hand.config.card_limit <= 0)))) then 
+    if G.pack_cards and not (G.GAME.STOP_USE and G.GAME.STOP_USE > 0) and (G.STATE == G.STATES.PLANET_PACK or G.STATE == G.STATES.STANDARD_PACK or G.STATE == G.STATES.BUFFOON_PACK or G.STATE == G.STATES.TAROT_PACK or G.STATE == G.STATES.SPECTRAL_PACK) then
         e.config.colour = G.C.GREY
         e.config.button = 'skip_booster'
     else
@@ -2160,7 +2245,7 @@ end
     local dont_dissolve = nil
     local delay_fac = 1
 
-    if card:check_use() then 
+    if (e.config.id ~= 'buy_from_pack' and card:check_use()) or (e.config.id == 'buy_from_pack' and not G.FUNCS.check_for_buy_space(card)) then 
       G.E_MANAGER:add_event(Event({func = function()
         e.disable_button = nil
         e.config.button = 'use_card'
@@ -2185,7 +2270,7 @@ end
       G.STATES.PLAY_TAROT
       
     G.CONTROLLER.locks.use = true
-    if G.booster_pack and not G.booster_pack.alignment.offset.py and (card.ability.consumeable or not (G.GAME.pack_choices and G.GAME.pack_choices > 1)) then
+    if G.booster_pack and not G.booster_pack.alignment.offset.py and (card.ability.consumeable or not (G.GAME.pack_choices and G.GAME.pack_choices > 1)) and e.config.id ~= 'buy_from_pack' then
       G.booster_pack.alignment.offset.py = G.booster_pack.alignment.offset.y
       G.booster_pack.alignment.offset.y = G.ROOM.T.y + 29
     end
@@ -2208,7 +2293,14 @@ end
 
     if card.area then card.area:remove_card(card) end
     
-    if card.ability.consumeable then
+    if card.ability.consumeable and e.config.id == 'buy_from_pack' then
+      card:add_to_deck()
+      G.consumeables:emplace(card)
+      play_sound('card1')
+      dont_dissolve = true
+      delay_fac = 0.2
+      ease_dollars(-card.cost)
+    elseif card.ability.consumeable then
       if G.STATE == G.STATES.TAROT_PACK or G.STATE == G.STATES.PLANET_PACK or G.STATE == G.STATES.SPECTRAL_PACK then
         card.T.x = G.hand.T.x + G.hand.T.w/2 - card.T.w/2
         card.T.y = G.hand.T.y + G.hand.T.h/2 - card.T.h/2 - 0.5
@@ -2270,6 +2362,11 @@ end
                   if area == G.consumeables then
                     G.booster_pack.alignment.offset.y = G.booster_pack.alignment.offset.py
                     G.booster_pack.alignment.offset.py = nil
+                  elseif e.config.id == 'buy_from_pack' then
+                    if G.booster_pack.alignment.offset.py then 
+                      G.booster_pack.alignment.offset.y = G.booster_pack.alignment.offset.py
+                      G.booster_pack.alignment.offset.py = nil
+                    end
                   elseif G.GAME.pack_choices and G.GAME.pack_choices > 1 then
                     if G.booster_pack.alignment.offset.py then 
                       G.booster_pack.alignment.offset.y = G.booster_pack.alignment.offset.py
@@ -2404,6 +2501,12 @@ end
 G.FUNCS.buy_from_shop = function(e)
     local c1 = e.config.ref_table
     if c1 and c1:is(Card) then
+      if e.config.id == 'buy_and_use' then
+        if c1:check_use() then
+          e.disable_button = nil
+          return false
+        end
+      end
       if e.config.id ~= 'buy_and_use' then
         if not G.FUNCS.check_for_buy_space(c1) then
           e.disable_button = nil
@@ -2555,6 +2658,70 @@ end
     end
   end
 
+  G.FUNCS.reroll_celestial = function(e)
+    stop_use()
+    ease_dollars(-G.GAME.reroll_celestial_cost)
+    G.GAME.reroll_celestial_press = true
+    G.E_MANAGER:add_event(Event({trigger = 'immediate', func = function()
+      local _size = #G.pack_cards.cards or 1
+      for i = #G.pack_cards.cards, 1, -1 do
+        local c = G.pack_cards:remove_card(G.pack_cards.cards[i])
+        c:remove()
+        c = nil
+      end
+      play_sound('coin2')
+      play_sound('other1')
+      for i = 1, _size do
+        local card = nil      
+        if G.GAME.used_vouchers.v_telescope and i == 1 then
+          local _planet, _hand, _tally = nil, nil, 0
+          for k, v in ipairs(G.handlist) do
+            if G.GAME.hands[v].visible and G.GAME.hands[v].played > _tally then
+              _hand = v
+              _tally = G.GAME.hands[v].played
+            end
+          end
+          if _hand then
+            for k, v in pairs(G.P_CENTER_POOLS.Planet) do
+              if v.config.hand_type == _hand then
+                _planet = v.key
+              end
+            end
+          end
+          card = create_card("Planet", G.pack_cards, nil, nil, true, true, _planet, 'pl2'..G.GAME.round_resets.ante)
+        else
+          card = create_card("Planet", G.pack_cards, nil, nil, true, true, nil, 'pl2'..G.GAME.round_resets.ante)
+        end
+        card:start_materialize({G.C.WHITE, G.C.WHITE}, nil, 1.5*G.SETTINGS.GAMESPEED)
+        G.pack_cards:emplace(card)
+        card:juice_up()
+      end
+    return true end}))
+  end
+  
+  G.FUNCS.reroll_buffoon = function(e)
+    stop_use()
+    ease_dollars(-G.GAME.reroll_buffoon_cost)
+    G.GAME.reroll_buffoon_press = true
+    G.E_MANAGER:add_event(Event({trigger = 'immediate', func = function()
+      local _size = #G.pack_cards.cards or 1
+      for i = #G.pack_cards.cards, 1, -1 do
+        local c = G.pack_cards:remove_card(G.pack_cards.cards[i])
+        c:remove()
+        c = nil
+      end
+      play_sound('coin2')
+      play_sound('other1')
+      for i = 1, _size do
+        local card = nil      
+        card = create_card("Joker", G.pack_cards, nil, nil, true, true, nil, 'buf1'..G.GAME.round_resets.ante)
+        card:start_materialize({G.C.WHITE, G.C.WHITE}, nil, 1.5*G.SETTINGS.GAMESPEED)
+        G.pack_cards:emplace(card)
+        card:juice_up()
+      end
+    return true end}))
+  end
+
   G.FUNCS.skip_booster = function(e)
     for i = 1, #G.jokers.cards do
       G.jokers.cards[i]:calculate_joker({skipping_booster = true})
@@ -2590,6 +2757,9 @@ end
     G.E_MANAGER:add_event(Event({trigger = 'after',delay = 0.2*delayfac,
     func = function()
       G.FUNCS.draw_from_hand_to_deck()
+      G.GAME.STANDARD_PACK_SELL = nil
+      G.GAME.reroll_celestial_press = nil
+      G.GAME.reroll_buffoon_press = nil
       G.E_MANAGER:add_event(Event({trigger = 'after',delay = 0.2*delayfac,
           func = function()
                 if G.shop and G.shop.alignment.offset.py then 
@@ -2614,16 +2784,16 @@ end
                 G.GAME.PACK_INTERRUPT = nil
           return true
       end}))
-      for i = 1, #G.GAME.tags do
-        if G.GAME.tags[i]:apply_to_run({type = 'new_blind_choice'}) then break end
-      end
-
+      
       G.E_MANAGER:add_event(Event({trigger = 'after',delay = 0.2*delayfac,
           func = function()
             save_run()
             return true
       end}))
-
+      
+      for i = 1, #G.GAME.tags do
+        if G.GAME.tags[i]:apply_to_run({type = 'new_blind_choice'}) then break end
+      end
       return true
     end}))
   end
@@ -2799,7 +2969,7 @@ end
 
   G.FUNCS.reroll_boss = function(e) 
     stop_use()
-    G.GAME.round_resets.boss_rerolled = true
+    if not G.from_boss_tag then G.GAME.round_resets.boss_rerolled = true end
     if not G.from_boss_tag then ease_dollars(-10) end
     G.from_boss_tag = nil
     G.CONTROLLER.locks.boss_reroll = true
@@ -2906,7 +3076,7 @@ end
         return true
       end
     }))
-    G.E_MANAGER:add_event(Event({ func = function() save_run(); return true end}))
+    G.E_MANAGER:add_event(Event({ func = function() G.E_MANAGER:add_event(Event({func = function() G.E_MANAGER:add_event(Event({func = function() save_run(); return true end})) return true end})) return true end}))
   end
 
 G.FUNCS.cash_out = function(e)
@@ -2944,12 +3114,14 @@ G.FUNCS.cash_out = function(e)
         }))
         play_sound("coin7")
         G.VIBRATION = G.VIBRATION + 1
+        G.MOBILE_VIBRATION_QUEUE = math.max(G.MOBILE_VIBRATION_QUEUE or 0, 2)
       end
       ease_chips(0)
       if G.GAME.round_resets.blind_states.Boss == 'Defeated' then 
         G.GAME.round_resets.blind_ante = G.GAME.round_resets.ante
         G.GAME.round_resets.blind_tags.Small = get_next_tag_key()
         G.GAME.round_resets.blind_tags.Big = get_next_tag_key()
+        G.GAME.round_resets.blind_tags.Boss = get_next_tag_key('Boss')
       end
       reset_blinds()
       delay(0.6)
