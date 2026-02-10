@@ -744,7 +744,7 @@ function modulate_sound(dt)
   G.ARGS.score_intensity.required_score = G.GAME.blind and G.GAME.blind.chips or 0
   G.ARGS.score_intensity.flames = math.min(1, (G.STAGE == G.STAGES.RUN and 1 or 0)*(
     (G.ARGS.chip_flames and (G.ARGS.chip_flames.real_intensity + G.ARGS.chip_flames.change) or 0))/10)
-  G.ARGS.score_intensity.organ = G.video_organ or G.ARGS.score_intensity.required_score > 0 and math.max(math.min(0.4, 0.1*math.log(G.ARGS.score_intensity.earned_score/(G.ARGS.score_intensity.required_score+1), 5)),0.) or 0
+  G.ARGS.score_intensity.organ = G.video_organ or G.ARGS.score_intensity.required_score > 0 and math.max(math.min(0.4, 0.1*math.log(G.ARGS.score_intensity.earned_score/(G.ARGS.score_intensity.required_score+1))/math.log(5)),0.) or 0
 
   local AC = G.SETTINGS.ambient_control
   G.ARGS.ambient_sounds = G.ARGS.ambient_sounds or {
@@ -953,24 +953,25 @@ function get_blind_amount(ante)
   end
 end
 
-function number_format(num)
+function number_format(num, e_switch_point)
   G.E_SWITCH_POINT = G.E_SWITCH_POINT or 100000000000
   if not num or type(num) ~= 'number' then return num or '' end
-  if num >= G.E_SWITCH_POINT then
+  if num >= (e_switch_point or G.E_SWITCH_POINT) then
     local x = string.format("%.4g",num)
-    local fac = math.floor(math.log(tonumber(x), 10))
-    return string.format("%.3f",x/(10^fac))..'e'..fac
+    local fac = math.floor(math.log10(tonumber(x)))
+    return string.format(fac >= 100 and "%.2f" or "%.3f",x/(10^fac))..'e'..fac
   end
   return string.format(num ~= math.floor(num) and (num >= 100 and "%.0f" or num >= 10 and "%.1f" or "%.2f") or "%.0f", num):reverse():gsub("(%d%d%d)", "%1,"):gsub(",$", ""):reverse()
 end
 
 function score_number_scale(scale, amt)
   G.E_SWITCH_POINT = G.E_SWITCH_POINT or 100000000000
-  if type(amt) ~= 'number' then return 0.7*(scale or 1) end
+  if type(amt) ~= 'number' then return 0.75*(scale or 1) end
   if amt >= G.E_SWITCH_POINT then
-    return 0.7*(scale or 1)
+    return 0.75*(scale or 1)
   elseif amt >= 1000000 then
-    return 14*0.75/(math.floor(math.log(amt))+4)*(scale or 1)
+    --14*0.75/(math.floor(math.log(amt))+4)*(scale or 1)
+    return 5*0.75/(math.floor(math.log10(amt))-1)*(scale or 1)
   else
       return 0.75*(scale or 1)
   end
@@ -1014,8 +1015,32 @@ function send_name()
   end
 end
 
+function record_history_hands(args)
+    G.GAME.history_hands = G.GAME.history_hands or {}
+    local current_hand = {}
+    current_hand.handname = args.handname
+    current_hand.disp_handname = args.disp_handname
+    current_hand.level = G.GAME.hands[args.handname].level
+    current_hand.chips = args.chips
+    current_hand.mult = args.mult
+    current_hand.chip_total = math.floor(args.chips*args.mult)
+    current_hand.cards = {}
+    for k, v in pairs(G.play.cards) do
+        local score = nil
+        for kk, vv in pairs(args.scoring_hand) do
+            if v == vv then score = true break end
+        end
+        local cardTable = v:save()
+        if score then cardTable.score = true end
+        table.insert(current_hand.cards, cardTable)
+    end
+    if G.GAME.chips + current_hand.chip_total - G.GAME.blind.chips >= 0 then current_hand.filter = true end
+    table.insert(G.GAME.history_hands, current_hand)
+end
+
 function check_and_set_high_score(score, amt)
   if not amt or type(amt) ~= 'number' then return end
+  if G.GAME.round_scores[score] and not G.GAME.round_scores[score].amt then G.GAME.round_scores[score].amt = 0 end
   if G.GAME.round_scores[score] and math.floor(amt) > G.GAME.round_scores[score].amt then
     G.GAME.round_scores[score].amt = math.floor(amt)
   end
@@ -1760,6 +1785,7 @@ function localize(args, misc_cat)
         end
         local desc_scale = G.LANG.font.DESCSCALE
         if G.F_MOBILE_UI then desc_scale = desc_scale*1.5 end
+        desc_scale = desc_scale*(args.type == 'tutorial' and 1.5 or 1.45)
         if args.type == 'name' then
           final_line[#final_line+1] = {n=G.UIT.O, config={
             object = DynaText({string = {assembled_string},
