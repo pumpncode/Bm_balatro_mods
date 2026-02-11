@@ -198,7 +198,7 @@ function Blind:set_blind(blind, reset, silent)
                 delay(0.15)
                 G.E_MANAGER:add_event(Event({ func = function() G.jokers:shuffle('aajk'); play_sound('cardSlide1', 1.15);return true end })) 
                 delay(0.15)
-                G.E_MANAGER:add_event(Event({ func = function() G.jokers:shuffle('aajk'); play_sound('cardSlide1', 1);return true end })) 
+                G.E_MANAGER:add_event(Event({ func = function() G.jokers:shuffle('aajk'); play_sound('cardSlide1', 1); return true end })) 
                 delay(0.5)
             return true end })) 
         end
@@ -337,6 +337,7 @@ function Blind:defeat(silent)
     }))
     for k, v in ipairs(G.jokers.cards) do
         if v.facing == 'back' then v:flip() end
+        if v.ability.forced_pinned then v.ability.forced_pinned = nil end
     end
     if self.name == 'The Manacle' and not self.disabled then
         G.hand:change_size(1)
@@ -409,6 +410,7 @@ function Blind:disable()
     end
     for _, v in ipairs(G.jokers.cards) do
         self:debuff_card(v)
+        if v.ability.forced_pinned then v.ability.forced_pinned = nil end
     end
     self:set_text()
     self:wiggle()
@@ -552,7 +554,7 @@ function Blind:debuff_hand(cards, hand, handname, check)
         if G.GAME.hands[handname].level > 1 then
             self.triggered = true
             if not check then
-                level_up_hand(self.children.animatedSprite, handname, nil, -1)
+                level_up_hand(self.children.animatedSprite, handname, nil, -(G.GAME.hands[handname].level-1))
                 self:wiggle()
             end
         end 
@@ -588,11 +590,10 @@ function Blind:drawn_to_hand()
         if self.name == 'Crimson Heart' and self.prepped and G.jokers.cards[1] then
             local jokers = {}
             for i = 1, #G.jokers.cards do
-                if not G.jokers.cards[i].debuff or #G.jokers.cards < 2 then jokers[#jokers+1] =G.jokers.cards[i] end
-                G.jokers.cards[i]:set_debuff(false)
-            end 
-            local _card = pseudorandom_element(jokers, pseudoseed('crimson_heart'))
-            if _card then
+                if not G.jokers.cards[i].debuff then jokers[#jokers+1] =G.jokers.cards[i] end
+            end
+            if #jokers > 0 then
+                local _card = pseudorandom_element(jokers, pseudoseed('crimson_heart'))
                 _card:set_debuff(true)
                 _card:juice_up()
                 self:wiggle()
@@ -622,6 +623,7 @@ function Blind:stay_flipped(area, card)
 end
 
 function Blind:debuff_card(card, from_blind)
+    if card.ability.name == "Wild Card" then card:set_debuff(false) return end
     if self.debuff and not self.disabled and card.area ~= G.jokers then
         if self.debuff.suit and card:is_suit(self.debuff.suit, true) then
             card:set_debuff(true)
@@ -721,7 +723,7 @@ function Blind:load(blindTable)
     self.discards_sub = blindTable.discards_sub
     self.hands_sub = blindTable.hands_sub
     self.boss = blindTable.boss
-    self.chips = blindTable.chips
+    self.chips = blindTable.chips or math.huge
     self.chip_text = blindTable.chip_text
     self.hands = blindTable.hands
     self.only_hand = blindTable.only_hand
@@ -745,6 +747,8 @@ function Blind:load(blindTable)
     if self.dollars > 0 then
         G.GAME.current_round.dollars_to_be_earned = string.rep(localize('$'), self.dollars)..''
         G.HUD_blind:get_UIE_by_ID("dollars_to_be_earned").config.object:pop_in(0)
+    end
+    if G.GAME.blind.name and G.GAME.blind.name ~= '' then
         G.HUD_blind.alignment.offset.y = 0
     end
     self:set_text()
