@@ -1,388 +1,595 @@
-if (love.system.getOS() == 'OS X' ) and (jit.arch == 'arm64' or jit.arch == 'arm') then jit.off() end
-require "engine/object"
-require "bit"
-require "engine/string_packer"
-require "engine/controller"
-require "back"
-require "tag"
-require "engine/event"
-require "engine/node"
-require "engine/moveable"
-require "engine/sprite"
-require "engine/animatedsprite"
-require "functions/misc_functions"
-require "game"
-require "globals"
-require "engine/ui"
-require "functions/UI_definitions"
-require "functions/state_events"
-require "functions/common_events"
-require "functions/button_callbacks"
-require "functions/misc_functions"
-require "functions/test_functions"
-require "card"
-require "cardarea"
-require "blind"
-require "card_character"
-require "engine/particles"
-require "engine/text"
-require "challenges"
+--Class
+Tag = Object:extend()
 
-math.randomseed( G.SEED )
-
-function love.run()
-	if love.load then love.load(love.arg.parseGameArguments(arg), arg) end
-
-	-- We don't want the first frame's dt to include time taken by love.load.
-	if love.timer then love.timer.step() end
-
-	local dt = 0
-	local dt_smooth = 1/100
-	local run_time = 0
-
-	-- Main loop time.
-	return function()
-		run_time = love.timer.getTime()
-		-- Process events.
-		if love.event and G and G.CONTROLLER then
-			love.event.pump()
-			local _n,_a,_b,_c,_d,_e,_f,touched
-			for name, a,b,c,d,e,f in love.event.poll() do
-				if name == "quit" then
-					if not love.quit or not love.quit() then
-						return a or 0
-					end
-				end
-				if name == 'touchpressed' then
-					touched = true
-				elseif name == 'mousepressed' then 
-					_n,_a,_b,_c,_d,_e,_f = name,a,b,c,d,e,f
-				else
-					love.handlers[name](a,b,c,d,e,f)
-				end
-			end
-			if _n then 
-				love.handlers['mousepressed'](_a,_b,_c,touched)
-			end
-		end
-
-		-- Update dt, as we'll be passing it to update
-		if love.timer then dt = love.timer.step() end
-		dt_smooth = math.min(0.8*dt_smooth + 0.2*dt, 0.1)
-		-- Call update and draw
-		if love.update then love.update(dt_smooth) end -- will pass 0 if love.timer is disabled
-
-		if love.graphics and love.graphics.isActive() then
-			if love.draw then love.draw() end
-			love.graphics.present()
-		end
-
-		run_time = math.min(love.timer.getTime() - run_time, 0.1)
-		G.FPS_CAP = G.FPS_CAP or 500
-		if run_time < 1./G.FPS_CAP then love.timer.sleep(1./G.FPS_CAP - run_time) end
-	end
+--Class Methods
+function Tag:init(_tag, for_collection, _blind_type)
+    self.key = _tag
+    local proto = G.P_TAGS[_tag] or G.tag_undiscovered
+    self.config = copy_table(proto.config)
+    self.pos = proto.pos
+    self.name = proto.name
+    self.tally = G.GAME.tag_tally or 0
+    self.triggered = false
+    G.tagid = G.tagid or 0
+    self.ID = G.tagid
+    G.tagid = G.tagid + 1
+    self.ability = {
+        orbital_hand = '['..localize('k_poker_hand')..']',
+        blind_type = _blind_type
+    }
+    G.GAME.tag_tally = G.GAME.tag_tally and (G.GAME.tag_tally + 1) or 1
+    if not for_collection then self:set_ability() end
 end
 
-function love.load() 
-	G:start_up()
-	--Steam integration
-	local os = love.system.getOS()
-	if os == 'OS X' or os == 'Windows' then 
-		local st = nil
-		--To control when steam communication happens, make sure to send updates to steam as little as possible
-		if os == 'OS X' then
-			local dir = love.filesystem.getSourceBaseDirectory()
-			local old_cpath = package.cpath
-			package.cpath = package.cpath .. ';' .. dir .. '/?.so'
-			st = require 'luasteam'
-			package.cpath = old_cpath
-		else
-			st = require 'luasteam'
-		end
+function Tag:nope()
+    G.E_MANAGER:add_event(Event({
+        delay = 0.2,
+        trigger = 'after',
+        func = (function()
+            attention_text({
+                text = 'NOPE',
+                colour = G.C.WHITE,
+                scale = 0.7, 
+                hold = 0.3/G.SETTINGS.GAMESPEED,
+                cover = self.HUD_tag,
+                cover_colour = G.C.BLACK,
+                align = 'cm',
+                })
+            play_sound('cancel', 1.4, 0.5)
+            return true
+        end)
+    }))
+    G.E_MANAGER:add_event(Event({
+        trigger = 'after',
+        delay = 0.1,
+        func = (function()
+            self.HUD_tag.states.visible = false
+            play_sound('cancel', 1.26, 0.5)
+            return true
+        end)
+    }))
 
-		st.send_control = {
-			last_sent_time = -200,
-			last_sent_stage = -1,
-			force = false,
-		}
-		if not (st.init and st:init()) then
-			love.event.quit()
-		end
-		--Set up the render window and the stage for the splash screen, then enter the gameloop with :update
-		G.STEAM = st
-	else
-	end
-
-	--Set the mouse to invisible immediately, this visibility is handled in the G.CONTROLLER
-	love.mouse.setVisible(false)
+    G.E_MANAGER:add_event(Event({
+        trigger = 'after',
+        delay = 0.5,
+        func = (function()
+            self:remove()
+            return true
+        end)
+    }))
 end
 
-function love.quit()
-	--Steam integration
-	if G.SOUND_MANAGER then G.SOUND_MANAGER.channel:push({type = 'stop'}) end
-	if G.STEAM then G.STEAM:shutdown() end
+function Tag:yep(message, _colour, func)
+    stop_use()
+
+    G.E_MANAGER:add_event(Event({
+        delay = 0.4,
+        trigger = 'after',
+        func = (function()
+            attention_text({
+                text = message,
+                colour = G.C.WHITE,
+                scale = 1, 
+                hold = 0.3/G.SETTINGS.GAMESPEED,
+                cover = self.HUD_tag,
+                cover_colour = _colour or G.C.GREEN,
+                align = 'cm',
+                })
+            play_sound('generic1', 0.9 + math.random()*0.1, 0.8)
+            play_sound('holo1', 1.2 + math.random()*0.1, 0.4)
+            return true
+        end)
+    }))
+    G.E_MANAGER:add_event(Event({
+        func = (function()
+            self.HUD_tag.states.visible = false
+            return true
+        end)
+    }))
+    G.E_MANAGER:add_event(Event({
+        func = func
+    }))
+    
+    G.E_MANAGER:add_event(Event({
+        trigger = 'after',
+        delay = 0.7,
+        func = (function()
+            self:remove()
+            return true
+        end)
+    }))
 end
 
-function love.update( dt )
-	--Perf monitoring checkpoint
-    timer_checkpoint(nil, 'update', true)
-    G:update(dt)
-end
-
-function love.draw()
-	--Perf monitoring checkpoint
-    timer_checkpoint(nil, 'draw', true)
-	G:draw()
-end
-
-function love.keypressed(key)
-	if not _RELEASE_MODE and G.keybind_mapping[key] then love.gamepadpressed(G.CONTROLLER.keyboard_controller, G.keybind_mapping[key])
-	else
-		G.CONTROLLER:set_HID_flags('mouse')
-		G.CONTROLLER:key_press(key)
-	end
-end
-
-function love.keyreleased(key)
-	if not _RELEASE_MODE and G.keybind_mapping[key] then love.gamepadreleased(G.CONTROLLER.keyboard_controller, G.keybind_mapping[key])
-	else
-		G.CONTROLLER:set_HID_flags('mouse')
-		G.CONTROLLER:key_release(key)
-	end
-end
-
-function love.gamepadpressed(joystick, button)
-	button = G.button_mapping[button] or button
-	G.CONTROLLER:set_gamepad(joystick)
-    G.CONTROLLER:set_HID_flags('button', button)
-    G.CONTROLLER:button_press(button)
-end
-
-function love.gamepadreleased(joystick, button)
-	button = G.button_mapping[button] or button
-    G.CONTROLLER:set_gamepad(joystick)
-    G.CONTROLLER:set_HID_flags('button', button)
-    G.CONTROLLER:button_release(button)
-end
-
-function love.mousepressed(x, y, button, touch)
-    G.CONTROLLER:set_HID_flags(touch and 'touch' or 'mouse')
-    if button == 1 then 
-		G.CONTROLLER:queue_L_cursor_press(x, y)
-	end
-	if button == 2 then
-		G.CONTROLLER:queue_R_cursor_press(x, y)
-	end
-end
-
-
-function love.mousereleased(x, y, button)
-    if button == 1 then G.CONTROLLER:L_cursor_release(x, y) end
-end
-
-function love.mousemoved(x, y, dx, dy, istouch)
-	G.CONTROLLER.last_touch_time = G.CONTROLLER.last_touch_time or -1
-	if next(love.touch.getTouches()) ~= nil then
-		G.CONTROLLER.last_touch_time = G.TIMERS.UPTIME
-	end
-    G.CONTROLLER:set_HID_flags(G.CONTROLLER.last_touch_time > G.TIMERS.UPTIME - 0.2 and 'touch' or 'mouse')
-end
-
-function love.joystickaxis( joystick, axis, value )
-    if math.abs(value) > 0.2 and joystick:isGamepad() then
-		G.CONTROLLER:set_gamepad(joystick)
-        G.CONTROLLER:set_HID_flags('axis')
+function Tag:set_ability()
+    if self.name == 'Orbital Tag' then
+        if G.orbital_hand then 
+            self.ability.orbital_hand = G.orbital_hand
+        elseif self.ability.blind_type then
+            if G.GAME.orbital_choices and G.GAME.orbital_choices[G.GAME.round_resets.ante][self.ability.blind_type] then
+                self.ability.orbital_hand = G.GAME.orbital_choices[G.GAME.round_resets.ante][self.ability.blind_type]       
+            end
+        end
     end
 end
 
-function love.errhand(msg)
-	if G.F_NO_ERROR_HAND then return end
-	msg = tostring(msg)
+function Tag:apply_to_run(_context)
+    if not self.triggered and self.config.type == _context.type then
+        if _context.type == 'eval' then 
+            if self.name == 'Investment Tag' and
+                G.GAME.last_blind and G.GAME.last_blind.boss then
+                    self:yep('+', G.C.GOLD,function() 
+                        return true
+                    end)
+                self.triggered = true
+                return {
+                    dollars = self.config.dollars,
+                    condition = localize('ph_defeat_the_boss'),
+                    pos = self.pos,
+                    tag = self
+                }
+            end
+        elseif _context.type == 'immediate' then 
+            local lock = self.ID
+            G.CONTROLLER.locks[lock] = true
+            if self.name == 'Top-up Tag' then
+                self:yep('+', G.C.PURPLE,function() 
+                    for i = 1, self.config.spawn_jokers do
+                        if G.jokers and #G.jokers.cards < G.jokers.config.card_limit then
+                            local card = create_card('Joker', G.jokers, nil, 0, nil, nil, nil, 'top')
+                            card:add_to_deck()
+                            G.jokers:emplace(card)
+                        end
+                    end
+                    G.CONTROLLER.locks[lock] = nil
+                    return true
+                end)
+                self.triggered = true
+                return true
+            end
+            if self.name == 'Skip Tag' then
+                self:yep('+', G.C.MONEY,function() 
+                        G.CONTROLLER.locks[lock] = nil
+                    return true
+                end)
+                ease_dollars((G.GAME.skips or 0)*self.config.skip_bonus)
+                self.triggered = true
+                return true
+            end
+            if self.name == 'Garbage Tag' then
+                self:yep('+', G.C.MONEY,function() 
+                        G.CONTROLLER.locks[lock] = nil
+                    return true
+                end)
+                ease_dollars((G.GAME.unused_discards or 0)*self.config.dollars_per_discard)
+                self.triggered = true
+                return true
+            end
+            if self.name == 'Handy Tag' then
+                self:yep('+', G.C.MONEY,function() 
+                        G.CONTROLLER.locks[lock] = nil
+                    return true
+                end)
+                ease_dollars((G.GAME.hands_played or 0)*self.config.dollars_per_hand)
+                self.triggered = true
+                return true
+            end
+            if self.name == 'Economy Tag' then
+                self:yep('+', G.C.MONEY,function() 
+                    G.CONTROLLER.locks[lock] = nil
+                    return true
+                end)
+                G.E_MANAGER:add_event(Event({
+                    trigger = 'immediate',
+                    func = function()
+                        ease_dollars(math.min(self.config.max, math.max(0,G.GAME.dollars)), true)
+                        return true
+                    end
+                }))
+                self.triggered = true
+                return true
+            end
+            if self.name == 'Orbital Tag' then
+                update_hand_text({sound = 'button', volume = 0.7, pitch = 0.8, delay = 0.3}, {
+                    handname= self.ability.orbital_hand,
+                    chips = G.GAME.hands[self.ability.orbital_hand].chips,
+                    mult = G.GAME.hands[self.ability.orbital_hand].mult,
+                    level= G.GAME.hands[self.ability.orbital_hand].level})
+                level_up_hand(self, self.ability.orbital_hand, nil, self.config.levels)
+                update_hand_text({sound = 'button', volume = 0.7, pitch = 1.1, delay = 0}, {mult = 0, chips = 0, handname = '', level = ''})
+                self:yep('+', G.C.MONEY,function() 
+                    G.CONTROLLER.locks[lock] = nil
+                    return true
+                end)
+                self.triggered = true
+                return true
+            end
+        elseif _context.type == 'new_blind_choice' then 
+            local lock = self.ID
+            G.CONTROLLER.locks[lock] = true
+            if self.name == 'Charm Tag' then
+                self:yep('+', G.C.PURPLE,function() 
+                    local key = 'p_arcana_mega_'..(math.random(1,2))
+                    local card = Card(G.play.T.x + G.play.T.w/2 - G.CARD_W*1.27/2,
+                    G.play.T.y + G.play.T.h/2-G.CARD_H*1.27/2, G.CARD_W*1.27, G.CARD_H*1.27, G.P_CARDS.empty, G.P_CENTERS[key], {bypass_discovery_center = true, bypass_discovery_ui = true})
+                    card.cost = 0
+                    card.from_tag = true
+                    G.FUNCS.use_card({config = {ref_table = card}})
+                    card:start_materialize()
+                    G.CONTROLLER.locks[lock] = nil
+                    return true
+                end)
+                self.triggered = true
+                return true
+            end
+            if self.name == 'Meteor Tag' then
+                self:yep('+', G.C.SECONDARY_SET.Planet,function() 
+                    local key = 'p_celestial_mega_'..(math.random(1,2))
+                    local card = Card(G.play.T.x + G.play.T.w/2 - G.CARD_W*1.27/2,
+                    G.play.T.y + G.play.T.h/2-G.CARD_H*1.27/2, G.CARD_W*1.27, G.CARD_H*1.27, G.P_CARDS.empty, G.P_CENTERS[key], {bypass_discovery_center = true, bypass_discovery_ui = true})
+                    card.cost = 0
+                    card.from_tag = true
+                    G.FUNCS.use_card({config = {ref_table = card}})
+                    card:start_materialize()
+                    G.CONTROLLER.locks[lock] = nil
+                    return true
+                end)
+                self.triggered = true
+                return true
+            end
+            if self.name == 'Ethereal Tag' then
+                self:yep('+', G.C.SECONDARY_SET.Spectral,function() 
+                    local key = 'p_spectral_normal_1'
+                    local card = Card(G.play.T.x + G.play.T.w/2 - G.CARD_W*1.27/2,
+                    G.play.T.y + G.play.T.h/2-G.CARD_H*1.27/2, G.CARD_W*1.27, G.CARD_H*1.27, G.P_CARDS.empty, G.P_CENTERS[key], {bypass_discovery_center = true, bypass_discovery_ui = true})
+                    card.cost = 0
+                    card.from_tag = true
+                    G.FUNCS.use_card({config = {ref_table = card}})
+                    card:start_materialize()
+                    G.CONTROLLER.locks[lock] = nil
+                    return true
+                end)
+                self.triggered = true
+                return true
+            end
+            if self.name == 'Standard Tag' then
+                self:yep('+', G.C.SECONDARY_SET.Spectral,function() 
+                    local key = 'p_standard_mega_1'
+                    local card = Card(G.play.T.x + G.play.T.w/2 - G.CARD_W*1.27/2,
+                    G.play.T.y + G.play.T.h/2-G.CARD_H*1.27/2, G.CARD_W*1.27, G.CARD_H*1.27, G.P_CARDS.empty, G.P_CENTERS[key], {bypass_discovery_center = true, bypass_discovery_ui = true})
+                    card.cost = 0
+                    card.from_tag = true
+                    G.FUNCS.use_card({config = {ref_table = card}})
+                    card:start_materialize()
+                    G.CONTROLLER.locks[lock] = nil
+                    return true
+                end)
+                self.triggered = true
+                return true
+            end
+            if self.name == 'Buffoon Tag' then
+                self:yep('+', G.C.SECONDARY_SET.Spectral,function() 
+                    local key = 'p_buffoon_mega_1'
+                    local card = Card(G.play.T.x + G.play.T.w/2 - G.CARD_W*1.27/2,
+                    G.play.T.y + G.play.T.h/2-G.CARD_H*1.27/2, G.CARD_W*1.27, G.CARD_H*1.27, G.P_CARDS.empty, G.P_CENTERS[key], {bypass_discovery_center = true, bypass_discovery_ui = true})
+                    card.cost = 0
+                    card.from_tag = true
+                    G.FUNCS.use_card({config = {ref_table = card}})
+                    card:start_materialize()
+                    G.CONTROLLER.locks[lock] = nil
+                    return true
+                end)
+                self.triggered = true
+                return true
+            end
+            if self.name == 'Boss Tag' then
+                local lock = self.ID
+                G.CONTROLLER.locks[lock] = true
+                self:yep('+', G.C.GREEN,function() 
+                    G.from_boss_tag = true
+                    G.FUNCS.reroll_boss()
+                    
+                    G.E_MANAGER:add_event(Event({func = function()
+                        G.E_MANAGER:add_event(Event({func = function()
+                            G.CONTROLLER.locks[lock] = nil
+                        return true; end}))
+                    return true; end}))
 
-	if G.SETTINGS.crashreports and _RELEASE_MODE and G.F_CRASH_REPORTS then 
-		local http_thread = love.thread.newThread([[
-			local https = require('https')
-			CHANNEL = love.thread.getChannel("http_channel")
+                    return true
+                end)
+                self.triggered = true
+                return true
+            end
+        elseif _context.type == 'voucher_add' then 
+            if self.name == 'Voucher Tag' then
+                self:yep('+', G.C.SECONDARY_SET.Voucher,function() 
+                    G.ARGS.voucher_tag = G.ARGS.voucher_tag or {}
+                    local voucher_key = get_next_voucher_key(true)
+                    G.ARGS.voucher_tag[voucher_key] = true
+                    G.shop_vouchers.config.card_limit = G.shop_vouchers.config.card_limit + 1
+                    local card = Card(G.shop_vouchers.T.x + G.shop_vouchers.T.w/2,
+                    G.shop_vouchers.T.y, G.CARD_W, G.CARD_H, G.P_CARDS.empty, G.P_CENTERS[voucher_key],{bypass_discovery_center = true, bypass_discovery_ui = true})
+                    create_shop_card_ui(card, 'Voucher', G.shop_vouchers)
+                    card:start_materialize()
+                    G.shop_vouchers:emplace(card)
+                    G.ARGS.voucher_tag = nil
+                    return true
+                end)
+                self.triggered = true
+            end
+        elseif _context.type == 'tag_add' then 
+            if self.name == 'Double Tag' and _context.tag.key ~= 'tag_double' then
+                local lock = self.ID
+                G.CONTROLLER.locks[lock] = true
+                self:yep('+', G.C.BLUE,function()
+                    if _context.tag.ability and _context.tag.ability.orbital_hand then
+                        G.orbital_hand = _context.tag.ability.orbital_hand
+                    end
+                    add_tag(Tag(_context.tag.key))
+                    G.orbital_hand = nil
+                    G.CONTROLLER.locks[lock] = nil
+                    return true
+                end)
+                self.triggered = true
+            end
+        elseif _context.type == 'round_start_bonus' then 
+            if self.name == 'Juggle Tag' then
+                self:yep('+', G.C.BLUE,function() 
+                    return true
+                end)
+                G.hand:change_size(self.config.h_size)
+                G.GAME.round_resets.temp_handsize = (G.GAME.round_resets.temp_handsize or 0) + self.config.h_size
+                self.triggered = true
+                return true
+            end
+        elseif _context.type == 'store_joker_create' then 
+            local card = nil
+            if self.name == 'Rare Tag' then
+                local rares_in_posession = {0}
+                for k, v in ipairs(G.jokers.cards) do
+                    if v.config.center.rarity == 3 and not rares_in_posession[v.config.center.key] then
+                        rares_in_posession[1] = rares_in_posession[1] + 1 
+                        rares_in_posession[v.config.center.key] = true
+                    end
+                end
 
-			while true do
-				--Monitor the channel for any new requests
-				local request = CHANNEL:demand()
-				if request then
-					https.request(request)
-				end
-			end
-		]])
-		local http_channel = love.thread.getChannel('http_channel')
-		http_thread:start()
-		local httpencode = function(str)
-			local char_to_hex = function(c)
-				return string.format("%%%02X", string.byte(c))
-			end
-			str = str:gsub("\n", "\r\n"):gsub("([^%w _%%%-%.~])", char_to_hex):gsub(" ", "+")
-			return str
-		end
-		
+                if #G.P_JOKER_RARITY_POOLS[3] > rares_in_posession[1] then 
+                    card = create_card('Joker', _context.area, nil, 1, nil, nil, nil, 'rta')
+                    create_shop_card_ui(card, 'Joker', _context.area)
+                    card.states.visible = false
+                    self:yep('+', G.C.RED,function() 
+                        card:start_materialize()
+                        card.ability.couponed = true
+                        card:set_cost()
+                        return true
+                    end)
+                else
+                    self:nope()
+                end
+                self.triggered = true
+            elseif self.name == 'Uncommon Tag' then
+                card = create_card('Joker', _context.area, nil, 0.9, nil, nil, nil, 'uta')
+                    create_shop_card_ui(card, 'Joker', _context.area)
+                    card.states.visible = false
+                    self:yep('+', G.C.GREEN,function() 
+                        card:start_materialize()
+                        card.ability.couponed = true
+                        card:set_cost()
+                        return true
+                    end)
+                end
+                self.triggered = true
+                return card
+        elseif _context.type == 'shop_start' then
+            if self.name == 'D6 Tag' and not G.GAME.shop_d6ed then
+                G.GAME.shop_d6ed = true
+                self:yep('+', G.C.GREEN,function() 
+                    G.GAME.round_resets.temp_reroll_cost = 0
+                    calculate_reroll_cost(true)
+                    return true
+                end)
+                self.triggered = true
+                return true
+            end
+        elseif _context.type == 'store_joker_modify' then
+            local _applied = nil
+            if not _context.card.edition and not _context.card.temp_edition and _context.card.ability.set == 'Joker' then
+                local lock = self.ID
+                G.CONTROLLER.locks[lock] = true
+                if self.name == 'Foil Tag' then
+                    _context.card.temp_edition = true
+                    self:yep('+', G.C.DARK_EDITION,function() 
+                        _context.card:set_edition({foil = true}, true)
+                        _context.card.ability.couponed = true
+                        _context.card:set_cost()
+                        _context.card.temp_edition = nil
+                        G.CONTROLLER.locks[lock] = nil
+                        return true
+                    end)
+                    _applied = true
+                elseif self.name == 'Holographic Tag' then
+                    _context.card.temp_edition = true
+                    self:yep('+', G.C.DARK_EDITION,function() 
+                        _context.card.temp_edition = nil
+                        _context.card:set_edition({holo = true}, true)
+                        _context.card.ability.couponed = true
+                        _context.card:set_cost()
+                        G.CONTROLLER.locks[lock] = nil
+                        return true
+                    end)
+                    _applied = true
+                elseif self.name == 'Polychrome Tag' then
+                    _context.card.temp_edition = true
+                    self:yep('+', G.C.DARK_EDITION,function() 
+                        _context.card.temp_edition = nil
+                        _context.card:set_edition({polychrome = true}, true)
+                        _context.card.ability.couponed = true
+                        _context.card:set_cost()
+                        G.CONTROLLER.locks[lock] = nil
+                        return true
+                    end)
+                    _applied = true
+                elseif self.name == 'Negative Tag' then
+                    _context.card.temp_edition = true
+                    self:yep('+', G.C.DARK_EDITION,function() 
+                        _context.card.temp_edition = nil
+                        _context.card:set_edition({negative = true}, true)
+                        _context.card.ability.couponed = true
+                        _context.card:set_cost()
+                        G.CONTROLLER.locks[lock] = nil
+                        return true
+                    end)
+                    _applied = true
+                end
+                self.triggered = true
+            end
 
-		local error = msg
-		local file = string.sub(msg, 0,  string.find(msg, ':'))
-		local function_line = string.sub(msg, string.len(file)+1)
-		function_line = string.sub(function_line, 0, string.find(function_line, ':')-1)
-		file = string.sub(file, 0, string.len(file)-1)
-		local trace = debug.traceback()
-		local boot_found, func_found = false, false
-		for l in string.gmatch(trace, "(.-)\n") do
-			if string.match(l, "boot.lua") then
-				boot_found = true
-			elseif boot_found and not func_found then
-				func_found = true
-				trace = ''
-				function_line = string.sub(l, string.find(l, 'in function')+12)..' line:'..function_line
-			end
-
-			if boot_found and func_found then 
-				trace = trace..l..'\n'
-			end
-		end
-
-		http_channel:push('https://958ha8ong3.execute-api.us-east-2.amazonaws.com/?error='..httpencode(error)..'&file='..httpencode(file)..'&function_line='..httpencode(function_line)..'&trace='..httpencode(trace)..'&version='..(G.VERSION))
-	end
-
-	if not love.window or not love.graphics or not love.event then
-		return
-	end
-
-	if not love.graphics.isCreated() or not love.window.isOpen() then
-		local success, status = pcall(love.window.setMode, 800, 600)
-		if not success or not status then
-			return
-		end
-	end
-
-	-- Reset state.
-	if love.mouse then
-		love.mouse.setVisible(true)
-		love.mouse.setGrabbed(false)
-		love.mouse.setRelativeMode(false)
-	end
-	if love.joystick then
-		-- Stop all joystick vibrations.
-		for i,v in ipairs(love.joystick.getJoysticks()) do
-			v:setVibration()
-		end
-	end
-	if love.audio then love.audio.stop() end
-	love.graphics.reset()
-	local font = love.graphics.setNewFont("resources/fonts/m6x11plus.ttf", 20)
-
-	love.graphics.clear(G.C.BLACK)
-	love.graphics.origin()
-
-
-	local p = 'Oops! Something went wrong:\n'..msg..'\n\n'..(not _RELEASE_MODE and debug.traceback() or G.SETTINGS.crashreports and
-		'Since you are opted in to sending crash reports, LocalThunk HQ was sent some useful info about what happened.\nDon\'t worry! There is no identifying or personal information. If you would like\nto opt out, change the \'Crash Report\' setting to Off' or
-		'Crash Reports are set to Off. If you would like to send crash reports, please opt in in the Game settings.\nThese crash reports help us avoid issues like this in the future')
-
-	local function draw()
-		local pos = love.window.toPixels(70)
-		love.graphics.push()
-		love.graphics.clear(G.C.BLACK)
-		love.graphics.setColor(1., 1., 1., 1.)
-		love.graphics.printf(p, font, pos, pos, love.graphics.getWidth() - pos)
-		love.graphics.pop()
-		love.graphics.present()
-
-	end
-
-	while true do
-		love.event.pump()
-
-		for e, a, b, c in love.event.poll() do
-			if e == "quit" then
-				return
-			elseif e == "keypressed" and a == "escape" then
-				return
-			elseif e == "touchpressed" then
-				local name = love.window.getTitle()
-				if #name == 0 or name == "Untitled" then name = "Game" end
-				local buttons = {"OK", "Cancel"}
-				local pressed = love.window.showMessageBox("Quit "..name.."?", "", buttons)
-				if pressed == 1 then
-					return
-				end
-			end
-		end
-
-		draw()
-
-		if love.timer then
-			love.timer.sleep(0.1)
-		end
-	end
-
+            return _applied
+        elseif _context.type == 'shop_final_pass' then
+            if self.name == 'Coupon Tag' and (G.shop and not G.GAME.shop_free) then
+                G.GAME.shop_free = true
+                self:yep('+', G.C.GREEN,function() 
+                    if G.shop_jokers and G.shop_booster then 
+                        for k, v in pairs(G.shop_jokers.cards) do
+                            v.ability.couponed = true
+                            v:set_cost()
+                        end
+                        for k, v in pairs(G.shop_booster.cards) do
+                            v.ability.couponed = true
+                            v:set_cost()
+                        end
+                    end
+                    return true
+                end)
+                self.triggered = true
+                return true
+            end
+        end
+    end
 end
 
-function love.resize(w, h)
-	if w/h < 1 then --Dont allow the screen to be too square, since pop in occurs above and below screen
-		h = w/1
-	end
+function Tag:save()
+    return {
+        key = self.key,
+        tally = self.tally, 
+        ability = self.ability
+    }
+end
 
-	--When the window is resized, this code resizes the Canvas, then places the 'room' or gamearea into the middle without streching it
-	if w/h < G.window_prev.orig_ratio then
-		G.TILESCALE = G.window_prev.orig_scale*w/G.window_prev.w
-	else
-		G.TILESCALE = G.window_prev.orig_scale*h/G.window_prev.h
-	end
+function Tag:load(tag_savetable)
+    self.key = tag_savetable.key
+    local proto = G.P_TAGS[self.key] or G.tag_undiscovered
+    self.config = copy_table(proto.config)
+    self.pos = proto.pos
+    self.name = proto.name
+    self.tally = tag_savetable.tally
+    self.ability = tag_savetable.ability
+    G.GAME.tag_tally = math.max(self.tally, G.GAME.tag_tally) + 1
+end
 
-	if G.ROOM then
-		G.ROOM.T.w = G.TILE_W
-		G.ROOM.T.h = G.TILE_H
-		G.ROOM_ATTACH.T.w = G.TILE_W
-		G.ROOM_ATTACH.T.h = G.TILE_H		
+function Tag:juice_up(_scale, _rot)
+    if self.tag_sprite then self.tag_sprite:juice_up(_scale, _rot) end
+end
 
-		if w/h < G.window_prev.orig_ratio then
-			G.ROOM.T.x = G.ROOM_PADDING_W
-			G.ROOM.T.y = (h/(G.TILESIZE*G.TILESCALE) - (G.ROOM.T.h+G.ROOM_PADDING_H))/2 + G.ROOM_PADDING_H/2
-		else
-			G.ROOM.T.y = G.ROOM_PADDING_H
-			G.ROOM.T.x = (w/(G.TILESIZE*G.TILESCALE) - (G.ROOM.T.w+G.ROOM_PADDING_W))/2 + G.ROOM_PADDING_W/2
-		end
+function Tag:generate_UI(_size)
+    _size = _size or 0.8
 
-		G.ROOM_ORIG = {
-            x = G.ROOM.T.x,
-            y = G.ROOM.T.y,
-            r = G.ROOM.T.r
-        }
+    local tag_sprite_tab = nil
 
-		if G.buttons then G.buttons:recalculate() end
-		if G.HUD then G.HUD:recalculate() end
-	end
+    local tag_sprite = Sprite(0,0,_size*1,_size*1,G.ASSET_ATLAS["tags"], (self.hide_ability) and G.tag_undiscovered.pos or self.pos)
+    tag_sprite.T.scale = 1
+    tag_sprite_tab = {n= G.UIT.C, config={align = "cm", ref_table = self, group = self.tally}, nodes={
+        {n=G.UIT.O, config={w=_size*1,h=_size*1, colour = G.C.BLUE, object = tag_sprite, focus_with_object = true}},
+    }}
+    tag_sprite:define_draw_steps({
+        {shader = 'dissolve', shadow_height = 0.05},
+        {shader = 'dissolve'},
+    })
+    tag_sprite.float = true
+    tag_sprite.states.hover.can = true
+    tag_sprite.states.drag.can = false
+    tag_sprite.states.collide.can = true
+    tag_sprite.config = {tag = self, force_focus = true}
 
-	G.WINDOWTRANS = {
-		x = 0, y = 0,
-		w = G.TILE_W+2*G.ROOM_PADDING_W, 
-		h = G.TILE_H+3*G.ROOM_PADDING_H,
-		real_window_w = w,
-		real_window_h = h
-	}
+    tag_sprite.hover = function(_self)
+        if not G.CONTROLLER.dragging.target or G.CONTROLLER.using_touch then 
+            if not _self.hovering and _self.states.visible then
+                _self.hovering = true
+                if _self == tag_sprite then
+                    _self.hover_tilt = 3
+                    _self:juice_up(0.05, 0.02)
+                    play_sound('paper1', math.random()*0.1 + 0.55, 0.42)
+                    play_sound('tarot2', math.random()*0.1 + 0.55, 0.09)
+                end
 
-	G.CANV_SCALE = 1
+                self:get_uibox_table(tag_sprite)
+                _self.config.h_popup =  G.UIDEF.card_h_popup(_self)
+                _self.config.h_popup_config ={align = 'cl', offset = {x=-0.1,y=0},parent = _self}
+                Node.hover(_self)
+                if _self.children.alert then 
+                    _self.children.alert:remove()
+                    _self.children.alert = nil
+                    if self.key and G.P_TAGS[self.key] then G.P_TAGS[self.key].alerted = true end
+                    G:save_progress()
+                end
+            end
+        end
+    end
+    tag_sprite.stop_hover = function(_self) _self.hovering = false; Node.stop_hover(_self); _self.hover_tilt = 0 end
 
-	if love.system.getOS() == 'Windows' and false then --implement later if needed
-		local render_w, render_h = love.window.getDesktopDimensions(G.SETTINGS.WINDOW.selcted_display)
-		local unscaled_dims = love.window.getFullscreenModes(G.SETTINGS.WINDOW.selcted_display)[1]
+    tag_sprite:juice_up()
+    self.tag_sprite = tag_sprite
 
-		local DPI_scale = math.floor((0.5*unscaled_dims.width/render_w + 0.5*unscaled_dims.height/render_h)*500 + 0.5)/500
+    return tag_sprite_tab, tag_sprite
+end
 
-		if DPI_scale > 1.1 then
-			G.CANV_SCALE = 1.5
+function Tag:get_uibox_table(tag_sprite)
+    tag_sprite = tag_sprite or self.tag_sprite
+    local name_to_check, loc_vars = self.name, {}
+    if name_to_check == 'Uncommon Tag' then
+    elseif name_to_check == 'Investment Tag' then loc_vars = {self.config.dollars}
+    elseif name_to_check == 'Handy Tag' then loc_vars = {self.config.dollars_per_hand, self.config.dollars_per_hand*(G.GAME.hands_played or 0)}
+    elseif name_to_check == 'Garbage Tag' then loc_vars = {self.config.dollars_per_discard, self.config.dollars_per_discard*(G.GAME.unused_discards or 0)}
+    elseif name_to_check == 'Juggle Tag' then loc_vars = {self.config.h_size}
+    elseif name_to_check == 'Top-up Tag' then loc_vars = {self.config.spawn_jokers}
+    elseif name_to_check == 'Skip Tag' then loc_vars = {self.config.skip_bonus, self.config.skip_bonus*((G.GAME.skips or 0)+1)}
+    elseif name_to_check == 'Orbital Tag' then loc_vars = {
+        (self.ability.orbital_hand == '['..localize('k_poker_hand')..']') and self.ability.orbital_hand or localize(self.ability.orbital_hand, 'poker_hands'), self.config.levels}
+    elseif name_to_check == 'Economy Tag' then loc_vars = {self.config.max}
+    end
+    tag_sprite.ability_UIBox_table = generate_card_ui(G.P_TAGS[self.key], nil, loc_vars, (self.hide_ability) and 'Undiscovered' or 'Tag', nil, (self.hide_ability))
+    return tag_sprite
+end
 
-			G.AA_CANVAS = love.graphics.newCanvas(G.WINDOWTRANS.real_window_w*G.CANV_SCALE, G.WINDOWTRANS.real_window_h*G.CANV_SCALE, {type = '2d', readable = true})
-			G.AA_CANVAS:setFilter('linear', 'linear')
-		else
-			G.AA_CANVAS = nil
-		end
-	end
+function Tag:remove_from_game()
+    local tag_key = nil
+    for k, v in pairs(G.GAME.tags) do
+        if v == self then tag_key = k end
+    end
+    table.remove(G.GAME.tags, tag_key)
+end
 
-	G.CANVAS = love.graphics.newCanvas(w*G.CANV_SCALE, h*G.CANV_SCALE, {type = '2d', readable = true})
-	G.CANVAS:setFilter('linear', 'linear')
-end 
+function Tag:remove()
+    self:remove_from_game()
+    local HUD_tag_key = nil
+    for k, v in pairs(G.HUD_tags) do
+        if v == self.HUD_tag then HUD_tag_key = k end
+    end
+
+    if HUD_tag_key then 
+        if G.HUD_tags and G.HUD_tags[HUD_tag_key+1] then
+            if HUD_tag_key == 1 then
+                G.HUD_tags[HUD_tag_key+1]:set_alignment({type = 'bri',
+                offset = {x=0.7,y=0},
+                xy_bond = 'Weak',
+                major = G.ROOM_ATTACH})
+            else
+                G.HUD_tags[HUD_tag_key+1]:set_role({
+                xy_bond = 'Weak',
+                major = G.HUD_tags[HUD_tag_key-1]})
+            end
+        end
+        table.remove(G.HUD_tags, HUD_tag_key)
+    end
+
+    self.HUD_tag:remove()
+end
