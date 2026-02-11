@@ -1,519 +1,388 @@
-VERSION = '1.0.1n'
-VERSION = VERSION..'-FULL'
---check_version
+if (love.system.getOS() == 'OS X' ) and (jit.arch == 'arm64' or jit.arch == 'arm') then jit.off() end
+require "engine/object"
+require "bit"
+require "engine/string_packer"
+require "engine/controller"
+require "back"
+require "tag"
+require "engine/event"
+require "engine/node"
+require "engine/moveable"
+require "engine/sprite"
+require "engine/animatedsprite"
+require "functions/misc_functions"
+require "game"
+require "globals"
+require "engine/ui"
+require "functions/UI_definitions"
+require "functions/state_events"
+require "functions/common_events"
+require "functions/button_callbacks"
+require "functions/misc_functions"
+require "functions/test_functions"
+require "card"
+require "cardarea"
+require "blind"
+require "card_character"
+require "engine/particles"
+require "engine/text"
+require "challenges"
 
---Globals
+math.randomseed( G.SEED )
 
-function Game:set_globals()
-    self.VERSION = VERSION
+function love.run()
+	if love.load then love.load(love.arg.parseGameArguments(arg), arg) end
 
-    --||||||||||||||||||||||||||||||
-    --         Feature Flags
-    --||||||||||||||||||||||||||||||
-    self.F_QUIT_BUTTON = true               --Include the main menu 'Quit' button
-    self.F_SKIP_TUTORIAL = false            --Completely skip the tutorial on fresh save
-    self.F_BASIC_CREDITS = false            --Remove references to Daniel Linssens itch.io
-    self.F_EXTERNAL_LINKS = true            --Remove all references to any external links (mainly for console)
-    self.F_ENABLE_PERF_OVERLAY = false      --Disable debugging tool for performance of each frame
-    self.F_NO_SAVING = false                --Disables all 'run' saving
-    self.F_MUTE = false                     --Force mute all sounds
-    self.F_SOUND_THREAD = true              --Have sound in a separate thread entirely - if not sounds will run on main thread
-    self.F_VIDEO_SETTINGS = true            --Let the player change their video settings
-    self.F_CTA = false                      --Call to Action video for the Demo - keep this as false
-    self.F_VERBOSE = true                   --Extra debug information on screen and in the console
-    self.F_HTTP_SCORES = false              --Include HTTP scores to fetch/set high scores
-    self.F_RUMBLE = nil                     --Add rumble to the primary controller - adjust this for amount of rumble
-    self.F_CRASH_REPORTS = false            --Send Crash reports over the internet
-    self.F_NO_ERROR_HAND = false            --Hard crash without error message screen
-    self.F_SWAP_AB_PIPS = false             --Swapping button pips for A and B buttons (mainly for switch)
-    self.F_SWAP_AB_BUTTONS = false          --Swapping button function for A and B buttons (mainly for switch)
-    self.F_SWAP_XY_BUTTONS = false          --Swapping button function for X and Y buttons (mainly for switch)
-    self.F_NO_ACHIEVEMENTS = false          --Disable achievements
-    self.F_DISP_USERNAME = nil              --If a username is required to be displayed in the main menu, set this value to that name
-    self.F_ENGLISH_ONLY = nil               --Disable language selection - only in english
-    self.F_GUIDE = false                    --Replace back/select button with 'guide' button
-    self.F_JAN_CTA = false                  --Call to action for Jan demo
-    self.F_HIDE_BG = false                  --Hiding the game objects when paused
-    self.F_TROPHIES = false                 --use 'trophy' terminology instead of 'achievemnt'
-    self.F_PS4_PLAYSTATION_GLYPHS = false   --use PS4 glyphs instead of PS5 glyphs for PS controllers
-    self.F_LOCAL_CLIPBOARD = false
-    self.F_SAVE_TIMER = 30
-    self.F_MOBILE_UI = false
-    self.F_HIDE_BETA_LANGS = nil
+	-- We don't want the first frame's dt to include time taken by love.load.
+	if love.timer then love.timer.step() end
 
-    --loadstring("\105\102\32\108\111\118\101\46\115\121\115\116\101\109\46\103\101\116\79\83\40\41\32\61\61\32\39\105\79\83\39\32\111\114\32\108\111\118\101\46\115\121\115\116\101\109\46\103\101\116\79\83\40\41\32\61\61\32\39\65\110\100\114\111\105\100\39\32\116\104\101\110\10\32\32\108\111\118\101\46\101\118\101\110\116\46\113\117\105\116\40\41\10\101\110\100\10")()
-    if love.system.getOS() == 'Windows' then
-        self.F_DISCORD = true
-        self.F_SAVE_TIMER = 5
-        self.F_ENGLISH_ONLY = false
-        self.F_CRASH_REPORTS = false
-    end
+	local dt = 0
+	local dt_smooth = 1/100
+	local run_time = 0
 
-    if love.system.getOS() == 'OS X' then
-        self.F_SAVE_TIMER = 5
-        self.F_DISCORD = true
-        self.F_ENGLISH_ONLY = false
-        self.F_CRASH_REPORTS = false
-    end
+	-- Main loop time.
+	return function()
+		run_time = love.timer.getTime()
+		-- Process events.
+		if love.event and G and G.CONTROLLER then
+			love.event.pump()
+			local _n,_a,_b,_c,_d,_e,_f,touched
+			for name, a,b,c,d,e,f in love.event.poll() do
+				if name == "quit" then
+					if not love.quit or not love.quit() then
+						return a or 0
+					end
+				end
+				if name == 'touchpressed' then
+					touched = true
+				elseif name == 'mousepressed' then 
+					_n,_a,_b,_c,_d,_e,_f = name,a,b,c,d,e,f
+				else
+					love.handlers[name](a,b,c,d,e,f)
+				end
+			end
+			if _n then 
+				love.handlers['mousepressed'](_a,_b,_c,touched)
+			end
+		end
 
-    if love.system.getOS() == 'Nintendo Switch' then
-        self.F_HIDE_BETA_LANGS = true
-        self.F_BASIC_CREDITS = true
-        self.F_NO_ERROR_HAND = true
-        self.F_QUIT_BUTTON = false
-        self.F_SKIP_TUTORIAL = false
-        self.F_ENABLE_PERF_OVERLAY = false
-        self.F_NO_SAVING = false
-        self.F_MUTE = false
-        self.F_SOUND_THREAD = true
-        self.F_SWAP_AB_PIPS = true
-        self.F_SWAP_AB_BUTTONS = false
-        self.F_SWAP_XY_BUTTONS = true
-        self.F_VIDEO_SETTINGS = false
-        self.F_RUMBLE = 0.7
-        self.F_CTA = false
-        self.F_VERBOSE = false
-        self.F_NO_ACHIEVEMENTS = true
-        self.F_ENGLISH_ONLY = nil
-        
-        self.F_EXTERNAL_LINKS = false
-        self.F_HIDE_BG = true
-    end
+		-- Update dt, as we'll be passing it to update
+		if love.timer then dt = love.timer.step() end
+		dt_smooth = math.min(0.8*dt_smooth + 0.2*dt, 0.1)
+		-- Call update and draw
+		if love.update then love.update(dt_smooth) end -- will pass 0 if love.timer is disabled
 
-    if love.system.getOS() == 'ps4' or love.system.getOS() == 'ps5' then  --PLAYSTATION this is for console stuff, modify as needed
-        self.F_HIDE_BETA_LANGS = true
-        self.F_NO_ERROR_HAND = true
-        self.F_QUIT_BUTTON = false
-        self.F_SKIP_TUTORIAL = false
-        self.F_ENABLE_PERF_OVERLAY = false
-        self.F_NO_SAVING = false
-        self.F_MUTE = false
-        self.F_SOUND_THREAD = true
-        self.F_VIDEO_SETTINGS = false
-        self.F_RUMBLE = 0.5
-        self.F_CTA = false
-        self.F_VERBOSE = false
-        
-        self.F_GUIDE = true
-        self.F_PS4_PLAYSTATION_GLYPHS = false
+		if love.graphics and love.graphics.isActive() then
+			if love.draw then love.draw() end
+			love.graphics.present()
+		end
 
-        self.F_EXTERNAL_LINKS = false
-        self.F_HIDE_BG = true
-        --self.F_LOCAL_CLIPBOARD = true
-    end
-
-    if love.system.getOS() == 'xbox' then
-        self.F_HIDE_BETA_LANGS = true
-        self.F_NO_ERROR_HAND = true
-        self.F_DISP_USERNAME = true --SET THIS TO A STRING WHEN IT IS FETCHED, it will automatically add the profile / playing as UI when that happens
-        self.F_SKIP_TUTORIAL = false
-        self.F_ENABLE_PERF_OVERLAY = false
-        self.F_NO_SAVING = false
-        self.F_MUTE = false
-        self.F_SOUND_THREAD = true
-        self.F_VIDEO_SETTINGS = false
-        self.F_RUMBLE = 1.0
-        self.F_CTA = false
-        self.F_VERBOSE = false
-        self.F_EXTERNAL_LINKS = false
-        self.F_HIDE_BG = true
-    end
-    
-    if love.system.getOS() == 'iOS' or love.system.getOS() == 'Android' then
-        self.F_RUMBLE = 1.0
-    end
-
-    --||||||||||||||||||||||||||||||
-    --             Time
-    --||||||||||||||||||||||||||||||
-    self.SEED = os.time()
-    self.TIMERS = {
-        TOTAL=0,
-        REAL = 0,
-        REAL_SHADER = 0,
-        UPTIME = 0,
-        BACKGROUND = 0
-    }
-    self.FRAMES = {
-        DRAW = 0,
-        MOVE = 0
-    }
-    self.exp_times = {xy = 0, scale = 0, r = 0}
-    --||||||||||||||||||||||||||||||
-    --           SETTINGS
-    --||||||||||||||||||||||||||||||
-    self.SETTINGS = {
-        COMP = {
-            name = '',
-            prev_name = '',
-            submission_name = nil,
-            score = 0,
-        },
-        DEMO = {
-            total_uptime = 0,
-            timed_CTA_shown = false,
-            win_CTA_shown = false,
-            quit_CTA_shown = false
-        },
-        ACHIEVEMENTS_EARNED = {},
-        crashreports = false,
-        colourblind_option = false,
-        language = 'en-us',
-        screenshake = true,
-        run_stake_stickers = false,
-        rumble = self.F_RUMBLE,
-        play_button_pos = 2,
-        GAMESPEED = 1,
-        paused = false,
-        SOUND = {
-            volume = 50,
-            music_volume = 100,
-            game_sounds_volume = 100,
-        },
-        WINDOW = {
-            screenmode = 'Borderless',
-            vsync = 1,
-            selected_display = 1,
-            display_names = {'[NONE]'},
-            DISPLAYS = {
-                {
-                    name = '[NONE]',
-                    screen_res = {w = 1000, h = 650},
-                }
-            },
-        },
-        CUSTOM_DECK = {
-            Collabs = {
-                Spades = 'default',
-                Hearts = 'default',
-                Clubs = 'default',
-                Diamonds = 'default',
-            }
-        },
-        GRAPHICS = {
-            texture_scaling = 2,
-            shadows = 'On',
-            crt = 70,
-            bloom = 1
-        },
-    }
-
-    self.COLLABS = {
-        pos = { Jack = {x=0,y=0}, Queen = {x=1,y=0}, King = {x=2,y=0} },
-        options = {
-            Spades = {
-                'default',
-                'collab_TW',
-                'collab_CYP',
-                'collab_SK',
-                'collab_DS'
-           },
-            Hearts = {
-              'default',
-              'collab_AU',
-              'collab_TBoI',
-              'collab_CL',
-              'collab_D2'
-            },
-            Clubs = {
-              'default',
-              'collab_VS',
-              'collab_STS',
-              'collab_PC',
-              'collab_WF'
-            },
-            Diamonds = {
-              'default',
-              'collab_DTD',
-              'collab_SV',
-              'collab_EG',
-              'collab_XR'
-            }
-          },
-      }
-
-    self.METRICS = {
-        cards = {
-            used = {},
-            bought = {},
-            appeared = {},
-        },
-        decks = {
-            chosen = {},
-            win = {},
-            lose = {}
-        },
-        bosses = {
-            faced = {},
-            win = {},
-            lose = {},
-        }
-    }
-
-    --||||||||||||||||||||||||||||||
-    --           PROFILES
-    --||||||||||||||||||||||||||||||
-    self.PROFILES = {
-        {},
-        {},
-        {},
-    }
-
-    --||||||||||||||||||||||||||||||
-    --        RENDER SCALE
-    --||||||||||||||||||||||||||||||
-    self.TILESIZE = 20
-    self.TILESCALE = 3.65
-    self.TILE_W = 21
-    self.TILE_H = 11.2
-    self.DRAW_HASH_BUFF = 2
-    self.CARD_W = 2.4*35/41
-    self.CARD_H = 2.4*47/41
-    self.HIGHLIGHT_H = 0.2*self.CARD_H
-    self.COLLISION_BUFFER = 0.05
-
-    self.PITCH_MOD = 1
-
-    --||||||||||||||||||||||||||||||
-    --        GAMESTATES
-    --||||||||||||||||||||||||||||||
-    self.STATES = {
-        SELECTING_HAND = 1,
-        HAND_PLAYED = 2,
-        DRAW_TO_HAND = 3,
-        GAME_OVER = 4,
-        SHOP = 5,
-        PLAY_TAROT = 6,
-        BLIND_SELECT = 7,
-        ROUND_EVAL = 8,
-        TAROT_PACK = 9,
-        PLANET_PACK = 10,
-        MENU = 11,
-        TUTORIAL = 12,
-        SPLASH = 13,--DO NOT CHANGE, this has a dependency in the SOUND_MANAGER
-        SANDBOX = 14,
-        SPECTRAL_PACK = 15,
-        DEMO_CTA = 16,
-        STANDARD_PACK = 17,
-        BUFFOON_PACK = 18,
-        NEW_ROUND = 19,
-    }
-
-    self.STAGES = {
-        MAIN_MENU = 1,
-        RUN = 2,
-        SANDBOX = 3
-    }
-    self.STAGE_OBJECTS = {
-        {},{},{}
-    }
-    self.STAGE = self.STAGES.MAIN_MENU
-    self.STATE = self.STATES.SPLASH
-    self.TAROT_INTERRUPT = nil
-    self.STATE_COMPLETE = false
-
-    --||||||||||||||||||||||||||||||
-    --          INSTANCES
-    --||||||||||||||||||||||||||||||
-    self.ARGS = {}
-    self.FUNCS = {}
-    self.I = {
-        NODE = {},
-        MOVEABLE = {},
-        SPRITE = {},
-        UIBOX = {},
-        POPUP = {},
-        CARD = {},
-        CARDAREA = {},
-        ALERT = {}
-    }
-    self.ANIMATION_ATLAS = {}
-    self.ASSET_ATLAS = {}
-    self.MOVEABLES = {}
-    self.ANIMATIONS = {}
-    self.DRAW_HASH = {}
-
-    --||||||||||||||||||||||||||||||
-    --        CONSTANTS
-    --||||||||||||||||||||||||||||||
-    self.MIN_CLICK_DIST = 0.9
-    self.MIN_HOVER_TIME = 0.1
-    self.DEBUG = false
-    self.ANIMATION_FPS = 10
-    self.VIBRATION = 0
-    self.MOBILE_VIBRATION_QUEUE = 0
-    self.CHALLENGE_WINS = 5
-
-    --||||||||||||||||||||||||||||||
-    --        COLOURS
-    --||||||||||||||||||||||||||||||
-    self.C = {
-        MULT = HEX('FE5F55'),
-        CHIPS = HEX("009dff"),
-        MONEY = HEX('f3b958'),
-        XMULT = HEX('FE5F55'),
-        FILTER = HEX('ff9a00'),
-        BLUE = HEX("009dff"),
-        RED = HEX('FE5F55'),
-        GREEN = HEX("4BC292"),
-        PALE_GREEN = HEX("56a887"),
-        ORANGE = HEX("fda200"),
-        IMPORTANT = HEX("ff9a00"),
-        GOLD = HEX('eac058'),
-        YELLOW = {1,1,0,1},
-        CLEAR = {0, 0, 0, 0}, 
-        WHITE = {1,1,1,1},
-        PURPLE = HEX('8867a5'),
-        BLACK = HEX("374244"),--4f6367"),
-        L_BLACK = HEX("4f6367"),
-        GREY = HEX("5f7377"),
-        CHANCE = HEX("4BC292"),
-        JOKER_GREY = HEX('bfc7d5'),
-        VOUCHER = HEX("cb724c"),
-        BOOSTER = HEX("646eb7"),
-        EDITION = {1,1,1,1},
-        DARK_EDITION = {0,0,0,1},
-        ETERNAL = HEX('c75985'),
-        PERISHABLE = HEX('4f5da1'),
-        RENTAL = HEX('b18f43'),
-        DYN_UI = {
-            MAIN = HEX('374244'),
-            DARK = HEX('374244'),
-            BOSS_MAIN = HEX('374244'),
-            BOSS_DARK = HEX('374244'),
-            BOSS_PALE = HEX('374244')
-        },
-        --For other high contrast suit colours
-        SO_1 = {
-            Hearts = HEX('f03464'),
-            Diamonds = HEX('f06b3f'),
-            Spades = HEX("403995"),
-            Clubs = HEX("235955"),
-        },
-        SO_2 = {
-            Hearts = HEX('f83b2f'),
-            Diamonds = HEX('e29000'),
-            Spades = HEX("4f31b9"),
-            Clubs = HEX("008ee6"),
-        },
-        SUITS = {
-            Hearts = HEX('FE5F55'),
-            Diamonds = HEX('FE5F55'),
-            Spades = HEX("374649"),
-            Clubs = HEX("424e54"),
-        },
-        UI = {
-            TEXT_LIGHT = {1,1,1,1},
-            TEXT_DARK = HEX("4F6367"),
-            TEXT_INACTIVE = HEX("88888899"),
-            BACKGROUND_LIGHT = HEX("B8D8D8"),
-            BACKGROUND_WHITE = {1,1,1,1},
-            BACKGROUND_DARK = HEX("7A9E9F"),
-            BACKGROUND_INACTIVE = HEX("666666FF"),
-            OUTLINE_LIGHT = HEX("D8D8D8"),
-            OUTLINE_LIGHT_TRANS = HEX("D8D8D866"),
-            OUTLINE_DARK = HEX("7A9E9F"),
-            TRANSPARENT_LIGHT = HEX("eeeeee22"),
-            TRANSPARENT_DARK = HEX("22222222"),
-            HOVER = HEX('00000055'),
-        },
-        SET = {
-            Default = HEX("cdd9dc"),
-            Enhanced = HEX("cdd9dc"),
-            Joker = HEX('424e54'),
-            Tarot = HEX('424e54'),--HEX('29adff'),
-            Planet = HEX("424e54"),
-            Spectral = HEX('424e54'),
-            Voucher = HEX("424e54"),
-        }, 
-        SECONDARY_SET = {
-            Default = HEX("9bb6bdFF"),
-            Enhanced = HEX("8389DDFF"),
-            Joker = HEX('708b91'),
-            Tarot = HEX('a782d1'),--HEX('29adff'),
-            Planet = HEX('13afce'),
-            Spectral = HEX('4584fa'),
-            Voucher = HEX("fd682b"),
-            Edition = HEX("4ca893"),
-        }, 
-        RARITY = {
-            HEX('009dff'),--HEX("708b91"),
-            HEX("4BC292"),
-            HEX('fe5f55'),
-            HEX("b26cbb")
-        },
-        BLIND = {
-            Small = HEX("50846e"),
-            Big = HEX("50846e"),
-            Boss = HEX("b44430"),
-            won = HEX("4f6367")
-        },
-        HAND_LEVELS = {
-            HEX("efefef"),
-            HEX("95acff"),
-            HEX("65efaf"),
-            HEX('fae37e'), 
-            HEX('ffc052'), 
-            HEX('f87d75'),
-            HEX('caa0ef')
-        },
-        BACKGROUND = {
-            L = {1,1,0,1},
-            D = HEX("374244"),
-            C = HEX("374244"),
-            contrast = 1
-        }
-    }
-    G.C.HAND_LEVELS[0] = G.C.RED
-    G.C.UI_CHIPS = copy_table(G.C.BLUE)
-    G.C.UI_MULT = copy_table(G.C.RED)
-    --||||||||||||||||||||||||||||||
-    --        ENUMS
-    --||||||||||||||||||||||||||||||
-    self.UIT = {
-        T=1, --text
-        B=2, --box (can be rounded)
-        C=3, --column
-        R=4, --row
-        O=5, --object - must be a Node
-        ROOT=7,
-        S=8, --slider
-        I=9, --input text box
-        padding = 0, --default padding
-    }
-    self.handlist = {
-        "Flush Five",
-        "Flush House",
-        "Five of a Kind",
-        "Straight Flush",
-        "Four of a Kind",
-        "Full House",
-        "Flush",
-        "Straight",
-        "Three of a Kind",
-        "Two Pair",
-        "Pair",
-        "High Card",
-    }
-    self.button_mapping = {
-        a = G.F_SWAP_AB_BUTTONS and 'b' or nil,
-        b = G.F_SWAP_AB_BUTTONS and 'a' or nil,
-        y = G.F_SWAP_XY_BUTTONS and 'x' or nil,
-        x = G.F_SWAP_XY_BUTTONS and 'y' or nil,
-    }
-    self.keybind_mapping = {{
-        a = 'dpleft',
-        d = 'dpright',
-        w = 'dpup',
-        s = 'dpdown',
-        x = 'x',
-        c = 'y',
-        space = 'a',
-        shift = 'b',
-        esc = 'start',
-        q = 'triggerleft',
-        e = 'triggerright',
-    }}
+		run_time = math.min(love.timer.getTime() - run_time, 0.1)
+		G.FPS_CAP = G.FPS_CAP or 500
+		if run_time < 1./G.FPS_CAP then love.timer.sleep(1./G.FPS_CAP - run_time) end
+	end
 end
 
-G = Game()
+function love.load() 
+	G:start_up()
+	--Steam integration
+	local os = love.system.getOS()
+	if os == 'OS X' or os == 'Windows' then 
+		local st = nil
+		--To control when steam communication happens, make sure to send updates to steam as little as possible
+		if os == 'OS X' then
+			local dir = love.filesystem.getSourceBaseDirectory()
+			local old_cpath = package.cpath
+			package.cpath = package.cpath .. ';' .. dir .. '/?.so'
+			st = require 'luasteam'
+			package.cpath = old_cpath
+		else
+			st = require 'luasteam'
+		end
+
+		st.send_control = {
+			last_sent_time = -200,
+			last_sent_stage = -1,
+			force = false,
+		}
+		if not (st.init and st:init()) then
+			love.event.quit()
+		end
+		--Set up the render window and the stage for the splash screen, then enter the gameloop with :update
+		G.STEAM = st
+	else
+	end
+
+	--Set the mouse to invisible immediately, this visibility is handled in the G.CONTROLLER
+	love.mouse.setVisible(false)
+end
+
+function love.quit()
+	--Steam integration
+	if G.SOUND_MANAGER then G.SOUND_MANAGER.channel:push({type = 'stop'}) end
+	if G.STEAM then G.STEAM:shutdown() end
+end
+
+function love.update( dt )
+	--Perf monitoring checkpoint
+    timer_checkpoint(nil, 'update', true)
+    G:update(dt)
+end
+
+function love.draw()
+	--Perf monitoring checkpoint
+    timer_checkpoint(nil, 'draw', true)
+	G:draw()
+end
+
+function love.keypressed(key)
+	if not _RELEASE_MODE and G.keybind_mapping[key] then love.gamepadpressed(G.CONTROLLER.keyboard_controller, G.keybind_mapping[key])
+	else
+		G.CONTROLLER:set_HID_flags('mouse')
+		G.CONTROLLER:key_press(key)
+	end
+end
+
+function love.keyreleased(key)
+	if not _RELEASE_MODE and G.keybind_mapping[key] then love.gamepadreleased(G.CONTROLLER.keyboard_controller, G.keybind_mapping[key])
+	else
+		G.CONTROLLER:set_HID_flags('mouse')
+		G.CONTROLLER:key_release(key)
+	end
+end
+
+function love.gamepadpressed(joystick, button)
+	button = G.button_mapping[button] or button
+	G.CONTROLLER:set_gamepad(joystick)
+    G.CONTROLLER:set_HID_flags('button', button)
+    G.CONTROLLER:button_press(button)
+end
+
+function love.gamepadreleased(joystick, button)
+	button = G.button_mapping[button] or button
+    G.CONTROLLER:set_gamepad(joystick)
+    G.CONTROLLER:set_HID_flags('button', button)
+    G.CONTROLLER:button_release(button)
+end
+
+function love.mousepressed(x, y, button, touch)
+    G.CONTROLLER:set_HID_flags(touch and 'touch' or 'mouse')
+    if button == 1 then 
+		G.CONTROLLER:queue_L_cursor_press(x, y)
+	end
+	if button == 2 then
+		G.CONTROLLER:queue_R_cursor_press(x, y)
+	end
+end
+
+
+function love.mousereleased(x, y, button)
+    if button == 1 then G.CONTROLLER:L_cursor_release(x, y) end
+end
+
+function love.mousemoved(x, y, dx, dy, istouch)
+	G.CONTROLLER.last_touch_time = G.CONTROLLER.last_touch_time or -1
+	if next(love.touch.getTouches()) ~= nil then
+		G.CONTROLLER.last_touch_time = G.TIMERS.UPTIME
+	end
+    G.CONTROLLER:set_HID_flags(G.CONTROLLER.last_touch_time > G.TIMERS.UPTIME - 0.2 and 'touch' or 'mouse')
+end
+
+function love.joystickaxis( joystick, axis, value )
+    if math.abs(value) > 0.2 and joystick:isGamepad() then
+		G.CONTROLLER:set_gamepad(joystick)
+        G.CONTROLLER:set_HID_flags('axis')
+    end
+end
+
+function love.errhand(msg)
+	if G.F_NO_ERROR_HAND then return end
+	msg = tostring(msg)
+
+	if G.SETTINGS.crashreports and _RELEASE_MODE and G.F_CRASH_REPORTS then 
+		local http_thread = love.thread.newThread([[
+			local https = require('https')
+			CHANNEL = love.thread.getChannel("http_channel")
+
+			while true do
+				--Monitor the channel for any new requests
+				local request = CHANNEL:demand()
+				if request then
+					https.request(request)
+				end
+			end
+		]])
+		local http_channel = love.thread.getChannel('http_channel')
+		http_thread:start()
+		local httpencode = function(str)
+			local char_to_hex = function(c)
+				return string.format("%%%02X", string.byte(c))
+			end
+			str = str:gsub("\n", "\r\n"):gsub("([^%w _%%%-%.~])", char_to_hex):gsub(" ", "+")
+			return str
+		end
+		
+
+		local error = msg
+		local file = string.sub(msg, 0,  string.find(msg, ':'))
+		local function_line = string.sub(msg, string.len(file)+1)
+		function_line = string.sub(function_line, 0, string.find(function_line, ':')-1)
+		file = string.sub(file, 0, string.len(file)-1)
+		local trace = debug.traceback()
+		local boot_found, func_found = false, false
+		for l in string.gmatch(trace, "(.-)\n") do
+			if string.match(l, "boot.lua") then
+				boot_found = true
+			elseif boot_found and not func_found then
+				func_found = true
+				trace = ''
+				function_line = string.sub(l, string.find(l, 'in function')+12)..' line:'..function_line
+			end
+
+			if boot_found and func_found then 
+				trace = trace..l..'\n'
+			end
+		end
+
+		http_channel:push('https://958ha8ong3.execute-api.us-east-2.amazonaws.com/?error='..httpencode(error)..'&file='..httpencode(file)..'&function_line='..httpencode(function_line)..'&trace='..httpencode(trace)..'&version='..(G.VERSION))
+	end
+
+	if not love.window or not love.graphics or not love.event then
+		return
+	end
+
+	if not love.graphics.isCreated() or not love.window.isOpen() then
+		local success, status = pcall(love.window.setMode, 800, 600)
+		if not success or not status then
+			return
+		end
+	end
+
+	-- Reset state.
+	if love.mouse then
+		love.mouse.setVisible(true)
+		love.mouse.setGrabbed(false)
+		love.mouse.setRelativeMode(false)
+	end
+	if love.joystick then
+		-- Stop all joystick vibrations.
+		for i,v in ipairs(love.joystick.getJoysticks()) do
+			v:setVibration()
+		end
+	end
+	if love.audio then love.audio.stop() end
+	love.graphics.reset()
+	local font = love.graphics.setNewFont("resources/fonts/m6x11plus.ttf", 20)
+
+	love.graphics.clear(G.C.BLACK)
+	love.graphics.origin()
+
+
+	local p = 'Oops! Something went wrong:\n'..msg..'\n\n'..(not _RELEASE_MODE and debug.traceback() or G.SETTINGS.crashreports and
+		'Since you are opted in to sending crash reports, LocalThunk HQ was sent some useful info about what happened.\nDon\'t worry! There is no identifying or personal information. If you would like\nto opt out, change the \'Crash Report\' setting to Off' or
+		'Crash Reports are set to Off. If you would like to send crash reports, please opt in in the Game settings.\nThese crash reports help us avoid issues like this in the future')
+
+	local function draw()
+		local pos = love.window.toPixels(70)
+		love.graphics.push()
+		love.graphics.clear(G.C.BLACK)
+		love.graphics.setColor(1., 1., 1., 1.)
+		love.graphics.printf(p, font, pos, pos, love.graphics.getWidth() - pos)
+		love.graphics.pop()
+		love.graphics.present()
+
+	end
+
+	while true do
+		love.event.pump()
+
+		for e, a, b, c in love.event.poll() do
+			if e == "quit" then
+				return
+			elseif e == "keypressed" and a == "escape" then
+				return
+			elseif e == "touchpressed" then
+				local name = love.window.getTitle()
+				if #name == 0 or name == "Untitled" then name = "Game" end
+				local buttons = {"OK", "Cancel"}
+				local pressed = love.window.showMessageBox("Quit "..name.."?", "", buttons)
+				if pressed == 1 then
+					return
+				end
+			end
+		end
+
+		draw()
+
+		if love.timer then
+			love.timer.sleep(0.1)
+		end
+	end
+
+end
+
+function love.resize(w, h)
+	if w/h < 1 then --Dont allow the screen to be too square, since pop in occurs above and below screen
+		h = w/1
+	end
+
+	--When the window is resized, this code resizes the Canvas, then places the 'room' or gamearea into the middle without streching it
+	if w/h < G.window_prev.orig_ratio then
+		G.TILESCALE = G.window_prev.orig_scale*w/G.window_prev.w
+	else
+		G.TILESCALE = G.window_prev.orig_scale*h/G.window_prev.h
+	end
+
+	if G.ROOM then
+		G.ROOM.T.w = G.TILE_W
+		G.ROOM.T.h = G.TILE_H
+		G.ROOM_ATTACH.T.w = G.TILE_W
+		G.ROOM_ATTACH.T.h = G.TILE_H		
+
+		if w/h < G.window_prev.orig_ratio then
+			G.ROOM.T.x = G.ROOM_PADDING_W
+			G.ROOM.T.y = (h/(G.TILESIZE*G.TILESCALE) - (G.ROOM.T.h+G.ROOM_PADDING_H))/2 + G.ROOM_PADDING_H/2
+		else
+			G.ROOM.T.y = G.ROOM_PADDING_H
+			G.ROOM.T.x = (w/(G.TILESIZE*G.TILESCALE) - (G.ROOM.T.w+G.ROOM_PADDING_W))/2 + G.ROOM_PADDING_W/2
+		end
+
+		G.ROOM_ORIG = {
+            x = G.ROOM.T.x,
+            y = G.ROOM.T.y,
+            r = G.ROOM.T.r
+        }
+
+		if G.buttons then G.buttons:recalculate() end
+		if G.HUD then G.HUD:recalculate() end
+	end
+
+	G.WINDOWTRANS = {
+		x = 0, y = 0,
+		w = G.TILE_W+2*G.ROOM_PADDING_W, 
+		h = G.TILE_H+2*G.ROOM_PADDING_H,
+		real_window_w = w,
+		real_window_h = h
+	}
+
+	G.CANV_SCALE = 1
+
+	if love.system.getOS() == 'Windows' and false then --implement later if needed
+		local render_w, render_h = love.window.getDesktopDimensions(G.SETTINGS.WINDOW.selcted_display)
+		local unscaled_dims = love.window.getFullscreenModes(G.SETTINGS.WINDOW.selcted_display)[1]
+
+		local DPI_scale = math.floor((0.5*unscaled_dims.width/render_w + 0.5*unscaled_dims.height/render_h)*500 + 0.5)/500
+
+		if DPI_scale > 1.1 then
+			G.CANV_SCALE = 1.5
+
+			G.AA_CANVAS = love.graphics.newCanvas(G.WINDOWTRANS.real_window_w*G.CANV_SCALE, G.WINDOWTRANS.real_window_h*G.CANV_SCALE, {type = '2d', readable = true})
+			G.AA_CANVAS:setFilter('linear', 'linear')
+		else
+			G.AA_CANVAS = nil
+		end
+	end
+
+	G.CANVAS = love.graphics.newCanvas(w*G.CANV_SCALE, h*G.CANV_SCALE, {type = '2d', readable = true})
+	G.CANVAS:setFilter('linear', 'linear')
+end 
