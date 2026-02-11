@@ -1,4 +1,4 @@
-VERSION = '1.0.1o'
+VERSION = '1.0.1n'
 VERSION = VERSION..'-FULL'
 --check_version
 
@@ -118,6 +118,10 @@ function Game:set_globals()
         self.F_EXTERNAL_LINKS = false
         self.F_HIDE_BG = true
     end
+    
+    if love.system.getOS() == 'iOS' or love.system.getOS() == 'Android' then
+        self.F_RUMBLE = 1.0
+    end
 
     --||||||||||||||||||||||||||||||
     --             Time
@@ -202,36 +206,28 @@ function Game:set_globals()
                 'collab_TW',
                 'collab_CYP',
                 'collab_SK',
-                'collab_DS',
-                'collab_AC',
-                'collab_STP',
+                'collab_DS'
            },
             Hearts = {
               'default',
               'collab_AU',
               'collab_TBoI',
               'collab_CL',
-              'collab_D2',
-              'collab_CR',
-              'collab_BUG',
+              'collab_D2'
             },
             Clubs = {
               'default',
               'collab_VS',
               'collab_STS',
               'collab_PC',
-              'collab_WF',
-              'collab_FO',
-              'collab_DBD'
+              'collab_WF'
             },
             Diamonds = {
               'default',
               'collab_DTD',
               'collab_SV',
               'collab_EG',
-              'collab_XR',
-              'collab_C7',
-              'collab_R'
+              'collab_XR'
             }
           },
       }
@@ -268,8 +264,8 @@ function Game:set_globals()
     --||||||||||||||||||||||||||||||
     self.TILESIZE = 20
     self.TILESCALE = 3.65
-    self.TILE_W = 20
-    self.TILE_H = 11.5
+    self.TILE_W = 21
+    self.TILE_H = 11.2
     self.DRAW_HASH_BUFF = 2
     self.CARD_W = 2.4*35/41
     self.CARD_H = 2.4*47/41
@@ -345,6 +341,7 @@ function Game:set_globals()
     self.DEBUG = false
     self.ANIMATION_FPS = 10
     self.VIBRATION = 0
+    self.MOBILE_VIBRATION_QUEUE = 0
     self.CHALLENGE_WINS = 5
 
     --||||||||||||||||||||||||||||||
