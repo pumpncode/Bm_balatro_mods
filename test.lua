@@ -360,7 +360,7 @@ function love.resize(w, h)
 	G.WINDOWTRANS = {
 		x = 0, y = 0,
 		w = G.TILE_W+2*G.ROOM_PADDING_W, 
-		h = G.TILE_H+2*G.ROOM_PADDING_H,
+		h = G.TILE_H+3*G.ROOM_PADDING_H,
 		real_window_w = w,
 		real_window_h = h
 	}
