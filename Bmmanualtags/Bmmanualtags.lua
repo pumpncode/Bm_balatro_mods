@@ -4,7 +4,7 @@
 --- MOD_AUTHOR: [BaiMao]
 --- MOD_DESCRIPTION: Make tags as manually triggered as possible
 --- BADGE_COLOUR: A64E91
---- VERSION: 1.0.1b
+--- VERSION: 1.0.1c
 ----------------------------------------------
 ------------MOD CODE -------------------------
 
@@ -30,7 +30,7 @@ function Tag:can_trigger()
             return true
         end
     elseif type == 'new_blind_choice' then
-        if  G.STATE == G.STATES.BLIND_SELECT then
+        if G.STATE == G.STATES.BLIND_SELECT then
             return true
         end
     elseif type == 'immediate' then
@@ -106,6 +106,41 @@ function Tag:apply_to_run(_context)
     end
 end
 
+function Tag:move_to_last()
+    if not G.HUD_tags or not G.GAME.tags then return end
+    local hud_key, game_key
+    for k, v in ipairs(G.HUD_tags) do
+        if v == self.HUD_tag then hud_key = k break end
+    end
+    for k, v in ipairs(G.GAME.tags) do
+        if v == self then game_key = k break end
+    end
+    if not hud_key or not game_key or hud_key == #G.HUD_tags then return end
+    local current_hud_tag = table.remove(G.HUD_tags, hud_key)
+    table.insert(G.HUD_tags, current_hud_tag)
+    local current_game_tag = table.remove(G.GAME.tags, game_key)
+    table.insert(G.GAME.tags, current_game_tag)
+    if hud_key == 1 then
+        G.HUD_tags[1]:set_alignment({
+            type = 'bri',
+            offset = {x=0.7, y=0},
+            xy_bond = 'Weak',
+            major = G.ROOM_ATTACH
+        })
+    else
+        G.HUD_tags[hud_key]:set_role({
+            xy_bond = 'Weak',
+            major = G.HUD_tags[hud_key - 1]
+        })
+    end
+    self.HUD_tag:set_alignment({
+        type = 'tm',
+        offset = {x=0, y=0},
+        xy_bond = 'Weak',
+        major = G.HUD_tags[#G.HUD_tags - 1]
+    })
+end
+
 local Tag_generate_UI_ref = Tag.generate_UI
 function Tag:generate_UI(_size)
     local tag_sprite_tab, tag_sprite = Tag_generate_UI_ref(self, _size)
@@ -121,6 +156,7 @@ function Tag:generate_UI(_size)
             self:click_to_run()
         end
         if not self.triggered then
+            self:move_to_last()
             self:juice_up()
             play_sound('cancel')
         end
